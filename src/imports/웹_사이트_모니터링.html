@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omni-Watch AI | 통합 웹 모니터링 시스템</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap');
+        body { font-family: 'Pretendard', sans-serif; background-color: #f8fafc; }
+        .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; }
+        .sidebar-item:hover { background-color: #f1f5f9; cursor: pointer; }
+        .sidebar-item.active { background-color: #eef2ff; color: #4f46e5; border-right: 4px solid #4f46e5; }
+        .target-card.active { border-color: #4f46e5; background-color: #f5f3ff; }
+        .scroll-hide::-webkit-scrollbar { display: none; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* 알림 설정 전용 스타일 */
+        .email-tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #eef2ff; color: #4f46e5; border: 1px solid #e0e7ff; }
+    </style>
+</head>
+<body class="h-screen flex overflow-hidden">
+
+    <!-- 사이드바 -->
+    <aside class="w-72 bg-white border-r flex-shrink-0 flex flex-col">
+        <div class="p-6">
+            <h1 class="text-xl font-bold text-indigo-600 flex items-center gap-2">
+                <i class="fas fa-shield-virus"></i> Omni-Watch AI
+            </h1>
+        </div>
+        
+        <nav class="px-2 space-y-1">
+            <div id="menu-dashboard" onclick="switchTab('dashboard')" class="sidebar-item active p-3 rounded-lg flex items-center gap-3">
+                <i class="fas fa-th-large w-5 text-center"></i> 모니터링 대시보드
+            </div>
+            <div id="menu-add" onclick="switchTab('add')" class="sidebar-item p-3 rounded-lg flex items-center gap-3 text-gray-600">
+                <i class="fas fa-plus-circle w-5 text-center"></i> 신규 타겟 추가
+            </div>
+            <div id="menu-alerts" onclick="switchTab('alerts')" class="sidebar-item p-3 rounded-lg flex items-center gap-3 text-gray-600">
+                <i class="fas fa-bell w-5 text-center"></i> 알림 설정
+            </div>
+        </nav>
+
+        <div class="mt-8 flex-1 flex flex-col px-4 overflow-hidden">
+            <div class="flex justify-between items-center mb-4 px-2 text-gray-400">
+                <h2 class="text-xs font-bold uppercase tracking-wider">등록된 사이트 목록</h2>
+                <span id="target-count" class="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded">0</span>
+            </div>
+            <div id="target-list" class="flex-1 overflow-y-auto space-y-2 pb-4 scroll-hide">
+                <div class="p-4 border border-dashed rounded-xl text-center text-[11px] text-gray-400">
+                    사이트를 추가해 주세요
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 border-t text-[10px] text-gray-400 text-center">
+            v1.4.0-SmartAlert
+        </div>
+    </aside>
+
+    <!-- 메인 컨텐츠 영역 -->
+    <main class="flex-1 overflow-y-auto bg-[#f8fafc] scroll-hide">
+        
+        <!-- [탭 1] 신규 타겟 추가 화면 -->
+        <div id="tab-add" class="tab-content p-12 max-w-4xl mx-auto">
+            <div class="text-center mb-12">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-indigo-100 text-indigo-600 rounded-2xl text-2xl mb-4">
+                    <i class="fas fa-plus"></i>
+                </div>
+                <h2 class="text-3xl font-bold text-gray-800 mb-2">새 모니터링 타겟 등록</h2>
+                <p class="text-gray-500">감시할 사이트의 루트 URL을 입력하면 시스템이 자동으로 모든 하위 페이지를 수집합니다.</p>
+            </div>
+
+            <div class="bg-white p-8 rounded-3xl shadow-sm border space-y-6">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">웹사이트 URL</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400 font-medium">https://</span>
+                        <input type="text" id="root-url" placeholder="example.com" 
+                               class="w-full pl-20 pr-4 py-4 bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-500 border rounded-2xl outline-none transition-all text-lg">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="p-4 border rounded-2xl hover:border-indigo-200 cursor-pointer transition-all">
+                        <div class="flex items-center gap-3 mb-2">
+                            <input type="checkbox" checked class="w-4 h-4 text-indigo-600 rounded">
+                            <span class="font-bold text-sm text-gray-700">시각적 비교 (F-203)</span>
+                        </div>
+                        <p class="text-xs text-gray-400">픽셀 단위로 UI 깨짐을 감지합니다.</p>
+                    </div>
+                    <div class="p-4 border rounded-2xl hover:border-indigo-200 cursor-pointer transition-all">
+                        <div class="flex items-center gap-3 mb-2">
+                            <input type="checkbox" checked class="w-4 h-4 text-indigo-600 rounded">
+                            <span class="font-bold text-sm text-gray-700">이미지 전수 조사 (F-202)</span>
+                        </div>
+                        <p class="text-xs text-gray-400">깨진 이미지 URL을 모두 찾아냅니다.</p>
+                    </div>
+                </div>
+
+                <button onclick="addTarget()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-2">
+                    <i class="fas fa-rocket"></i> 수집 및 모니터링 시작
+                </button>
+            </div>
+        </div>
+
+        <!-- [탭 2] 대시보드 화면 -->
+        <div id="tab-dashboard" class="tab-content active p-8">
+            <div id="empty-state" class="flex flex-col items-center justify-center py-32 text-center">
+                <div class="w-64 mb-6 opacity-40">
+                    <i class="fas fa-satellite-dish text-8xl text-gray-300"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">선택된 타겟이 없습니다.</h2>
+                <p class="text-gray-500 mb-6">왼쪽 목록에서 사이트를 선택하거나 새로운 사이트를 추가하세요.</p>
+                <button onclick="switchTab('add')" class="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition">
+                    신규 타겟 등록하기
+                </button>
+            </div>
+
+            <div id="dashboard-content" class="hidden">
+                <div class="flex items-end justify-between mb-8">
+                    <div>
+                        <div class="flex items-center gap-3 mb-1">
+                            <h2 class="text-3xl font-black text-gray-900" id="current-target-name">TARGET</h2>
+                            <span id="target-status-badge" class="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full flex items-center gap-1.5">
+                                <span class="status-dot bg-green-500"></span> ACTIVE
+                            </span>
+                        </div>
+                        <p class="text-gray-500 flex items-center gap-2">
+                            <i class="fas fa-link text-xs"></i> <span id="current-target-url">https://example.com</span>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                        <div class="text-indigo-500 mb-3 text-xl"><i class="fas fa-file-code"></i></div>
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-tighter">Total Pages</p>
+                        <h3 class="text-2xl font-bold text-gray-800" id="stat-total">0</h3>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                        <div class="text-green-500 mb-3 text-xl"><i class="fas fa-check-circle"></i></div>
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-tighter">Healthy</p>
+                        <h3 class="text-2xl font-bold text-green-600" id="stat-success">0</h3>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                        <div class="text-red-500 mb-3 text-xl"><i class="fas fa-image"></i></div>
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-tighter">Broken Img</p>
+                        <h3 class="text-2xl font-bold text-red-600" id="stat-broken">0</h3>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                        <div class="text-orange-500 mb-3 text-xl"><i class="fas fa-tachometer-alt"></i></div>
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-tighter">Avg Response</p>
+                        <h3 class="text-2xl font-bold text-gray-800">0.8s</h3>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-2 space-y-6">
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div class="p-5 border-b flex justify-between items-center">
+                                <h3 class="font-bold text-gray-800 text-sm">페이지 모니터링 상세</h3>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-gray-50 text-gray-400 font-bold uppercase">
+                                        <tr>
+                                            <th class="px-6 py-4">URL Path</th>
+                                            <th class="px-6 py-4">Status</th>
+                                            <th class="px-6 py-4">Resources</th>
+                                            <th class="px-6 py-4">Response</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="url-table-body" class="divide-y text-gray-600 font-medium"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-6">
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                            <h3 class="font-bold text-gray-800 mb-4 text-sm flex items-center gap-2">
+                                <i class="fas fa-camera text-indigo-500"></i> Visual Health (F-203)
+                            </h3>
+                            <div id="visual-diff-preview" class="aspect-video bg-gray-50 rounded-xl overflow-hidden mb-4 relative flex items-center justify-center border border-dashed border-gray-200">
+                                <i class="fas fa-image text-gray-300 text-3xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- [탭 3] 알림 설정 화면 -->
+        <div id="tab-alerts" class="tab-content p-12 max-w-6xl mx-auto">
+            <div class="flex items-center gap-4 mb-10">
+                <div class="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-xl shadow-lg shadow-indigo-200">
+                    <i class="fas fa-bell"></i>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800">알림 통합 설정</h2>
+                    <p class="text-sm text-gray-500">수신할 이메일 주소를 입력하고 알림을 받을 사이트들을 선택하세요.</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <!-- 이메일 및 사이트 매칭 섹션 -->
+                <div class="lg:col-span-7 space-y-6">
+                    <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
+                        <h3 class="font-bold text-gray-800 mb-6 flex items-center gap-2">
+                            <i class="fas fa-envelope-open-text text-indigo-500"></i> 이메일-사이트 매칭 등록
+                        </h3>
+                        
+                        <!-- 이메일 입력 -->
+                        <div class="space-y-4 mb-8">
+                            <label class="block text-xs font-bold text-gray-400 uppercase">1. 수신 이메일 주소</label>
+                            <div class="flex items-center gap-2 p-1 bg-gray-50 border rounded-2xl focus-within:ring-2 focus-within:ring-indigo-500 transition-all">
+                                <input type="email" id="alert-email-input" placeholder="수신 이메일 주소 입력" 
+                                       class="flex-1 bg-transparent px-4 py-3 outline-none text-sm placeholder:text-gray-400 font-medium">
+                                <button onclick="addEmailWithSelection()" class="bg-indigo-600 text-white px-8 py-3 rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-sm transition-all">
+                                    등록
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 사이트 다중 선택 -->
+                        <div class="space-y-4">
+                            <div class="flex justify-between items-center">
+                                <label class="block text-xs font-bold text-gray-400 uppercase">2. 알림을 받을 사이트 선택</label>
+                                <button onclick="toggleAllCheckboxes()" class="text-[10px] text-indigo-600 font-bold hover:underline">전체 선택/해제</button>
+                            </div>
+                            <div id="selection-target-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2 scroll-hide">
+                                <!-- 등록된 사이트들이 체크박스로 표시됨 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 등록된 알림 목록 섹션 -->
+                <div class="lg:col-span-5 space-y-6">
+                    <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col h-full min-h-[400px]">
+                        <h3 class="font-bold text-gray-800 mb-6 flex items-center justify-between">
+                            등록된 알림 채널
+                            <span id="email-count-badge" class="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-bold">0</span>
+                        </h3>
+                        <div id="email-list" class="space-y-3 flex-1 overflow-y-auto scroll-hide">
+                            <!-- 이메일 목록 -->
+                        </div>
+
+                        <div class="mt-8 pt-6 border-t">
+                            <h4 class="font-bold mb-3 flex items-center gap-2 text-xs text-gray-800 uppercase tracking-tighter">
+                                <i class="fas fa-info-circle text-indigo-500"></i> 현재 적용된 알림 정책
+                            </h4>
+                            <ul class="text-[11px] text-gray-500 space-y-2 leading-relaxed">
+                                <li class="flex gap-2"><i class="fas fa-caret-right text-indigo-400"></i> HTTP 4xx/5xx 장애 감지 시 즉시 발송</li>
+                                <li class="flex gap-2"><i class="fas fa-caret-right text-indigo-400"></i> 시각적 UI 변화 5% 이상 발생 시 발송</li>
+                                <li class="flex gap-2"><i class="fas fa-caret-right text-indigo-400"></i> 미수집된 이미지 자원 발생 시 발송</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let targets = [];
+        let currentTargetId = null;
+        let alertChannels = []; // [{ email: '', targets: [id1, id2] }]
+
+        function handleImgError(img) {
+            img.onerror = null;
+            const parent = img.parentElement;
+            parent.innerHTML = `<div class="w-full h-full bg-gray-100 flex flex-col items-center justify-center text-gray-400 p-4"><i class="fas fa-image-slash text-2xl mb-2"></i><p class="text-[10px] uppercase font-bold">Preview Unavailable</p></div>`;
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.getElementById('tab-' + tabName).classList.add('active');
+
+            document.querySelectorAll('.sidebar-item').forEach(item => item.classList.remove('active', 'text-gray-600'));
+            document.getElementById('menu-' + tabName).classList.add('active');
+            
+            if (tabName === 'dashboard' && !currentTargetId) {
+                document.getElementById('empty-state').classList.remove('hidden');
+                document.getElementById('dashboard-content').classList.add('hidden');
+            }
+
+            if (tabName === 'alerts') {
+                renderAlertSettings();
+            }
+        }
+
+        function addTarget() {
+            const urlInput = document.getElementById('root-url');
+            let url = urlInput.value.trim();
+            if (!url) { alert("URL을 입력해 주세요."); return; }
+
+            const newTarget = {
+                id: Date.now(),
+                name: url.split('.')[0].toUpperCase(),
+                url: url,
+                status: 'active',
+                data: generateMockData(url),
+                timestamp: new Date().toLocaleTimeString(),
+                previewUrl: `https://picsum.photos/seed/${Math.random()}/500/300`
+            };
+
+            targets.push(newTarget);
+            urlInput.value = '';
+            renderTargetList();
+            selectTarget(newTarget.id);
+            switchTab('dashboard');
+        }
+
+        function generateMockData(baseUrl) {
+            const paths = ["/", "/login", "/shop", "/api/v2", "/cart"];
+            return paths.map(p => ({
+                path: p,
+                status: Math.random() > 0.05 ? 200 : 404,
+                brokenImg: Math.random() > 0.85,
+                loadTime: (Math.random() * 1.5 + 0.2).toFixed(2) + 's'
+            }));
+        }
+
+        function renderTargetList() {
+            const listContainer = document.getElementById('target-list');
+            document.getElementById('target-count').innerText = targets.length;
+            if (targets.length === 0) {
+                listContainer.innerHTML = `<div class="p-4 border border-dashed rounded-xl text-center text-[11px] text-gray-400 uppercase font-bold">No Sites Added</div>`;
+                return;
+            }
+            listContainer.innerHTML = targets.map(t => `
+                <div onclick="selectTarget(${t.id})" class="target-card p-3 border rounded-xl bg-white cursor-pointer transition-all hover:shadow-md ${currentTargetId === t.id ? 'active shadow-sm border-indigo-200' : 'border-gray-50'}">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-bold text-xs truncate w-32 tracking-tight">${t.name}</span>
+                        <span class="status-dot bg-green-500"></span>
+                    </div>
+                    <div class="text-[9px] text-gray-400 truncate">${t.url}</div>
+                </div>
+            `).join('');
+        }
+
+        function selectTarget(id) {
+            currentTargetId = id;
+            const target = targets.find(t => t.id === id);
+            if (!target) return;
+            document.getElementById('empty-state').classList.add('hidden');
+            document.getElementById('dashboard-content').classList.remove('hidden');
+            document.getElementById('current-target-name').innerText = target.name;
+            document.getElementById('current-target-url').innerText = `https://${target.url}`;
+
+            const stats = {
+                total: target.data.length,
+                success: target.data.filter(d => d.status === 200).length,
+                broken: target.data.filter(d => d.brokenImg).length
+            };
+            document.getElementById('stat-total').innerText = stats.total;
+            document.getElementById('stat-success').innerText = stats.success;
+            document.getElementById('stat-broken').innerText = stats.broken;
+
+            const tbody = document.getElementById('url-table-body');
+            tbody.innerHTML = target.data.map(d => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 font-bold text-gray-800">${d.path}</td>
+                    <td class="px-6 py-4"><span class="px-2 py-0.5 rounded-full text-[9px] font-black ${d.status === 200 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${d.status}</span></td>
+                    <td class="px-6 py-4">${d.brokenImg ? '<span class="text-red-500 font-bold">Broken</span>' : '<span class="text-gray-300">OK</span>'}</td>
+                    <td class="px-6 py-4 text-gray-400 font-mono text-[10px]">${d.loadTime}</td>
+                </tr>
+            `).join('');
+
+            document.getElementById('visual-diff-preview').innerHTML = `<img src="${target.previewUrl}" class="w-full h-full object-cover" onerror="handleImgError(this)">`;
+            renderTargetList();
+        }
+
+        /* 알림 설정 전용 스크립트 */
+        function renderAlertSettings() {
+            const container = document.getElementById('selection-target-list');
+            if (targets.length === 0) {
+                container.innerHTML = `<div class="col-span-full py-8 text-center text-gray-400 text-xs italic">먼저 대시보드에서 사이트를 추가해 주세요.</div>`;
+                return;
+            }
+
+            container.innerHTML = targets.map(t => `
+                <label class="flex items-center gap-3 p-3 border rounded-xl bg-white hover:border-indigo-200 cursor-pointer transition-all">
+                    <input type="checkbox" name="target-select" value="${t.id}" class="w-4 h-4 text-indigo-600 rounded">
+                    <div>
+                        <p class="text-xs font-bold text-gray-800">${t.name}</p>
+                        <p class="text-[9px] text-gray-400 truncate w-32">${t.url}</p>
+                    </div>
+                </label>
+            `).join('');
+            renderEmailList();
+        }
+
+        function toggleAllCheckboxes() {
+            const checkboxes = document.querySelectorAll('input[name="target-select"]');
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+            checkboxes.forEach(cb => cb.checked = !allChecked);
+        }
+
+        function addEmailWithSelection() {
+            const emailInput = document.getElementById('alert-email-input');
+            const email = emailInput.value.trim();
+            const selectedTargetIds = Array.from(document.querySelectorAll('input[name="target-select"]:checked')).map(cb => parseInt(cb.value));
+
+            if (!email || !email.includes('@')) { 
+                emailInput.focus();
+                return; 
+            }
+            if (selectedTargetIds.length === 0) {
+                alert("알림을 수신할 사이트를 하나 이상 선택해 주세요.");
+                return;
+            }
+            if (alertChannels.some(c => c.email === email)) {
+                alert("이미 등록된 이메일 주소입니다.");
+                return;
+            }
+            
+            alertChannels.push({
+                email: email,
+                targetIds: selectedTargetIds
+            });
+            
+            emailInput.value = '';
+            document.querySelectorAll('input[name="target-select"]').forEach(cb => cb.checked = false);
+            renderEmailList();
+        }
+
+        function removeChannel(email) {
+            alertChannels = alertChannels.filter(c => c.email !== email);
+            renderEmailList();
+        }
+
+        function renderEmailList() {
+            const container = document.getElementById('email-list');
+            document.getElementById('email-count-badge').innerText = alertChannels.length;
+            
+            if (alertChannels.length === 0) {
+                container.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-40 border border-dashed rounded-3xl text-gray-400">
+                        <i class="fas fa-mailbox mb-2 text-2xl"></i>
+                        <p class="text-xs">등록된 알림 채널이 없습니다.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = alertChannels.map(channel => {
+                const matchedTargets = targets.filter(t => channel.targetIds.includes(t.id));
+                const targetTags = matchedTargets.map(t => `<span class="email-tag">${t.name}</span>`).join('');
+                
+                return `
+                    <div class="p-4 bg-gray-50 border border-gray-100 rounded-2xl group relative overflow-hidden transition-all hover:border-indigo-200">
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs">
+                                    <i class="fas fa-user"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-bold text-gray-800">${channel.email}</p>
+                                    <p class="text-[10px] text-gray-400">활성 상태</p>
+                                </div>
+                            </div>
+                            <button onclick="removeChannel('${channel.email}')" class="text-gray-300 hover:text-red-500 transition-colors">
+                                <i class="fas fa-trash-alt text-xs"></i>
+                            </button>
+                        </div>
+                        <div class="flex flex-wrap gap-1">
+                            ${targetTags}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    </script>
+</body>
+</html>
