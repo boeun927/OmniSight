@@ -131,7 +131,7 @@ export default function App() {
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const res = await fetch('http://localhost:3001/api/targets');
+        const res = await fetch('/api/targets');
         const data = await res.json();
         setTargets(data);
         
@@ -173,7 +173,7 @@ export default function App() {
       return sched;
     });
 
-    fetch('http://localhost:3001/api/schedule', {
+    fetch('/api/schedule', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ schedules: schedulesToSync })
@@ -186,7 +186,7 @@ export default function App() {
     if (activeTab === 'dashboard') {
       interval = setInterval(async () => {
         try {
-          const res = await fetch('http://localhost:3001/api/targets');
+          const res = await fetch('/api/targets');
           const data = await res.json();
           setTargets(data);
         } catch (err) {
@@ -221,7 +221,7 @@ export default function App() {
     setCollectState("loading");
     
     try {
-      const response = await fetch('http://localhost:3001/api/discover', {
+      const response = await fetch('/api/discover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url })
@@ -252,7 +252,7 @@ export default function App() {
     // 백엔드에 실제 등록 요청 (수집된 데이터 전송)
     setCollectState("loading");
     try {
-      const response = await fetch('http://localhost:3001/api/targets', {
+      const response = await fetch('/api/targets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -340,7 +340,7 @@ export default function App() {
   const deleteTarget = async (id: number) => {
     if (window.confirm("해당 사이트를 목록에서 삭제하시겠습니까?")) {
       try {
-        await fetch(`http://localhost:3001/api/targets/${id}`, { method: 'DELETE' });
+        await fetch(`/api/targets/${id}`, { method: 'DELETE' });
         setTargets((prev) => prev.filter((t) => t.id !== id));
         if (currentTargetId === id) {
           setCurrentTargetId(null);
