@@ -64,6 +64,7 @@ type Target = {
   data: PageData[];
   timestamp: string;
   previewUrl: string;
+  history?: any[];
 };
 
 type AlertChannel = {
@@ -166,7 +167,7 @@ export default function App() {
           activeHours: globalSchedule.activeHours,
           customStart: globalSchedule.customStart,
           customEnd: globalSchedule.customEnd,
-          paused: globalSchedule.paused
+          paused: globalSchedule.globalPaused
         };
       }
       return sched;
@@ -264,7 +265,7 @@ export default function App() {
             activeHours: globalSchedule.activeHours, 
             customStart: globalSchedule.customStart, 
             customEnd: globalSchedule.customEnd, 
-            paused: globalSchedule.paused 
+            paused: globalSchedule.globalPaused 
           }
         })
       });

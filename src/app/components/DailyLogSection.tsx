@@ -414,7 +414,7 @@ export function DailyLogSection({ targetName, targetId, history }: Props) {
           { label: "전체 점검", value: stats.total.toLocaleString(), color: "#1f2937", bg: "white" },
           { label: "정상",       value: stats.ok.toLocaleString(),    color: "#16a34a", bg: "#f0fdf4" },
           { label: "오류",       value: stats.err.toLocaleString(),   color: "#dc2626", bg: "#fff5f5" },
-          { label: "평균 응답",  value: stats.avgLoad,                color: C.primary, bg: C.lightBg },
+          { label: "평균 응답",  value: stats.avg,                color: C.primary, bg: C.lightBg },
         ].map((s) => (
           <div key={s.label} className="px-5 py-4" style={{ backgroundColor: s.bg }}>
             <p className="text-gray-400 mb-0.5 uppercase" style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.05em" }}>{s.label}</p>
