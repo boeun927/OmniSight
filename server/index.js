@@ -194,6 +194,14 @@ app.delete('/api/targets/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// 프론트엔드 정적 파일 서빙 (배포용)
+const clientDistPath = path.join(__dirname, '../dist');
+app.use(express.static(clientDistPath));
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(clientDistPath, 'index.html'));
+});
+
 app.listen(PORT, () => {
   loadData(); // 시작 시 데이터 복구
   console.log(`Monitoring server running on http://localhost:${PORT}`);
