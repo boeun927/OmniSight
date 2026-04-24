@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   PlusCircle,
@@ -126,6 +126,76 @@ export default function App() {
 
   const currentTarget = targets.find((t) => t.id === currentTargetId) || null;
 
+  // ── 0. 초기 데이터 로드 ──────────────────────────────────────
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const res = await fetch('http://localhost:3001/api/targets');
+        const data = await res.json();
+        setTargets(data);
+        
+        // 백엔드 데이터로 스케줄 상태 복구
+        if (data.length > 0) {
+          const restoredSchedules = data.map((t: any) => ({
+            targetId: t.id,
+            useGlobal: false,
+            ...(t.schedule || { interval: t.interval || 30, activeHours: "all", customStart: "09:00", customEnd: "18:00", paused: false })
+          }));
+          setTargetSchedules(restoredSchedules);
+          if (currentTargetId === null) {
+            setCurrentTargetId(data[0].id);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load initial targets:", err);
+      }
+    };
+    fetchInitialData();
+  }, []);
+
+  // ── 1. 스케줄 동기화 (Auto-save) ──────────────────────────────
+  useEffect(() => {
+    if (targets.length === 0 || targetSchedules.length === 0) return;
+
+    // 글로벌 설정이 체크된 타겟은 글로벌 값을 덮어씌움
+    const schedulesToSync = targetSchedules.map(sched => {
+      if (sched.useGlobal) {
+        return {
+          ...sched,
+          interval: globalSchedule.interval,
+          activeHours: globalSchedule.activeHours,
+          customStart: globalSchedule.customStart,
+          customEnd: globalSchedule.customEnd,
+          paused: globalSchedule.paused
+        };
+      }
+      return sched;
+    });
+
+    fetch('http://localhost:3001/api/schedule', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ schedules: schedulesToSync })
+    }).catch(err => console.error("Schedule sync error:", err));
+  }, [globalSchedule, targetSchedules]);
+
+  // ── 2. 대시보드 활성 시 주기적으로 데이터 업데이트 (Polling) ──
+  useEffect(() => {
+    let interval: any;
+    if (activeTab === 'dashboard') {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch('http://localhost:3001/api/targets');
+          const data = await res.json();
+          setTargets(data);
+        } catch (err) {
+          console.error("Polling error:", err);
+        }
+      }, 5000); // 5초마다 최신 데이터 확인
+    }
+    return () => clearInterval(interval);
+  }, [activeTab]);
+
   const switchTab = (tab: TabName) => {
     // 탭 재진입 시 각 페이지 초기화
     if (tab === "add") {
@@ -150,7 +220,7 @@ export default function App() {
     setCollectState("loading");
     
     try {
-      const response = await fetch('http://localhost:3001/api/collect', {
+      const response = await fetch('http://localhost:3001/api/discover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url })
@@ -158,9 +228,7 @@ export default function App() {
       const data = await response.json();
       
       if (data.success) {
-        // 결과를 path 목록으로 변환하여 저장
         setCollectedUrls(data.results.map((r: any) => r.path));
-        // 전체 결과를 임시 저장해두었다가 모니터링 시작 시 사용
         (window as any)._lastCollection = data;
         setCollectState("collected");
       } else {
@@ -173,38 +241,53 @@ export default function App() {
     }
   };
 
-  const startMonitoring = () => {
+  const startMonitoring = async () => {
     const url = urlInput.trim();
     if (!url || collectedUrls.length === 0) return;
     
     const lastData = (window as any)._lastCollection;
     const finalUrl = lastData?.url || (url.startsWith('http') ? url : 'https://' + url);
 
-    const newTarget: Target = {
-      id: Date.now(),
-      name: finalUrl.replace(/^https?:\/\//, "").split(".")[0].toUpperCase(),
-      url: finalUrl,
-      status: "active",
-      data: lastData?.results || collectedUrls.map((p) => ({
-        path: p,
-        status: 200,
-        brokenImg: false,
-        loadTime: "0.00s",
-      })),
-      timestamp: new Date().toLocaleTimeString(),
-      previewUrl: `https://picsum.photos/seed/${Math.random()}/500/300`,
-    };
-    setTargets((prev) => [...prev, newTarget]);
-    setTargetSchedules((prev) => [
-      ...prev,
-      { targetId: newTarget.id, useGlobal: true, interval: globalSchedule.interval, activeHours: "all", customStart: "09:00", customEnd: "18:00", paused: false },
-    ]);
-    setUrlInput("");
-    setCurrentTargetId(newTarget.id);
-    setImgError(false);
-    setCollectState("idle");
-    setCollectedUrls([]);
-    setActiveTab("dashboard");
+    // 백엔드에 실제 등록 요청 (수집된 데이터 전송)
+    setCollectState("loading");
+    try {
+      const response = await fetch('http://localhost:3001/api/targets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          url: finalUrl,
+          name: finalUrl.replace(/^https?:\/\//, "").replace(/^www\./, "").split(".")[0].toUpperCase(),
+          data: lastData?.results || [],
+          interval: globalSchedule.interval,
+          schedule: { 
+            interval: globalSchedule.interval, 
+            activeHours: globalSchedule.activeHours, 
+            customStart: globalSchedule.customStart, 
+            customEnd: globalSchedule.customEnd, 
+            paused: globalSchedule.paused 
+          }
+        })
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        const newTarget = data.target;
+        setTargets((prev) => [...prev, newTarget]);
+        setTargetSchedules((prev) => [
+          ...prev,
+          { targetId: newTarget.id, useGlobal: true, interval: globalSchedule.interval, activeHours: "all", customStart: "09:00", customEnd: "18:00", paused: false },
+        ]);
+        setUrlInput("");
+        setCurrentTargetId(newTarget.id);
+        setImgError(false);
+        setCollectState("idle");
+        setCollectedUrls([]);
+        setActiveTab("dashboard");
+      }
+    } catch (err) {
+      alert("모니터링 등록 중 오류가 발생했습니다.");
+      setCollectState("idle");
+    }
   };
 
   const resetCollection = () => {
@@ -253,15 +336,18 @@ export default function App() {
     setAlertChannels((prev) => prev.filter((c) => c.email !== email));
   };
 
-  const deleteTarget = (id: number) => {
-    setTargets((prev) => prev.filter((t) => t.id !== id));
-    setTargetSchedules((prev) => prev.filter((s) => s.targetId !== id));
-    setAlertChannels((prev) =>
-      prev.map((c) => ({ ...c, targetIds: c.targetIds.filter((tid) => tid !== id) }))
-    );
-    if (currentTargetId === id) {
-      setCurrentTargetId(null);
-      setActiveTab("guide");
+  const deleteTarget = async (id: number) => {
+    if (window.confirm("해당 사이트를 목록에서 삭제하시겠습니까?")) {
+      try {
+        await fetch(`http://localhost:3001/api/targets/${id}`, { method: 'DELETE' });
+        setTargets((prev) => prev.filter((t) => t.id !== id));
+        if (currentTargetId === id) {
+          setCurrentTargetId(null);
+          setActiveTab("guide");
+        }
+      } catch (err) {
+        console.error("Delete failed:", err);
+      }
     }
   };
 
@@ -1147,7 +1233,7 @@ export default function App() {
                     </div>
                     <p className="text-gray-500 flex items-center gap-2">
                       <Link size={12} />
-                      <span>https://{currentTarget.url}</span>
+                      <span>{currentTarget.url}</span>
                     </p>
                   </div>
                 </div>
@@ -1265,7 +1351,7 @@ export default function App() {
                 </div>
 
                 {/* 날짜별 모니터링 기록 */}
-                <DailyLogSection targetName={currentTarget.name} targetId={currentTarget.id} />
+                <DailyLogSection targetName={currentTarget.name} targetId={currentTarget.id} history={currentTarget.history || []} />
               </div>
             )}
           </div>
@@ -1340,7 +1426,7 @@ export default function App() {
                         className="hover:underline"
                         style={{ fontSize: "0.625rem", color: C.primary, fontWeight: 700 }}
                       >
-                        전 선택/해제
+                        전체 선택/해제
                       </button>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-y-auto pr-2" style={{ maxHeight: "15rem", scrollbarWidth: "none" }}>

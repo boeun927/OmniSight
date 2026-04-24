@@ -40,40 +40,7 @@ type DayRecord = {
   loadTime: string;
 };
 
-// ── 결정론적 난수 ────────────────────────────────────────────
-function seededRand(seed: string): () => number {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
-  return () => {
-    h = (Math.imul(2246822519, h) ^ (h >>> 16)) | 0;
-    h = (Math.imul(3266489917, h) ^ (h >>> 13)) | 0;
-    return (h >>> 0) / 0xffffffff;
-  };
-}
-
-function generateDailyLog(dateStr: string, targetId: number): DayRecord[] {
-  const paths = ["/", "/login", "/shop", "/api/v2", "/cart"];
-  const timeSlots: string[] = [];
-  for (let h = 0; h < 24; h += 2) {
-    timeSlots.push(`${String(h).padStart(2, "0")}:00`);
-    timeSlots.push(`${String(h).padStart(2, "0")}:30`);
-  }
-  const records: DayRecord[] = [];
-  timeSlots.forEach((time) => {
-    paths.forEach((path) => {
-      const rng = seededRand(`${dateStr}-${targetId}-${time}-${path}`);
-      records.push({
-        date: dateStr,
-        time,
-        path,
-        status: rng() > 0.06 ? 200 : 404,
-        brokenImg: rng() > 0.88,
-        loadTime: (rng() * 1.8 + 0.18).toFixed(2) + "s",
-      });
-    });
-  });
-  return records;
-}
+// 가짜 데이터 생성 로직 제거
 
 // ── 날짜 유틸 ────────────────────────────────────────────────
 function toLocalISODate(d: Date) {
@@ -153,9 +120,10 @@ function daySummary(records: DayRecord[]) {
 interface Props {
   targetName: string;
   targetId: number;
+  history: any[];
 }
 
-export function DailyLogSection({ targetName, targetId }: Props) {
+export function DailyLogSection({ targetName, targetId, history }: Props) {
   const today = toLocalISODate(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("daily");
 
@@ -189,10 +157,21 @@ export function DailyLogSection({ targetName, targetId }: Props) {
   );
 
   // ── 전체 레코드 ────────────────────────────────────────────
-  const allRecords = useMemo(
-    () => dateRange.flatMap((d) => generateDailyLog(d, targetId)),
-    [dateRange, targetId]
-  );
+  const allRecords = useMemo(() => {
+    const todayStr = toLocalISODate(new Date());
+    return history.flatMap((h) => {
+      // 백엔드 timestamp는 "HH:MM:SS" 형식임
+      const [time] = h.timestamp.split(' ');
+      return h.results.map((r: any) => ({
+        date: todayStr, // 현재는 당일 데이터 위주이므로 오늘 날짜로 매칭
+        time: time,
+        path: r.path,
+        status: r.status,
+        brokenImg: r.brokenImg,
+        loadTime: r.loadTime
+      }));
+    });
+  }, [history]);
 
   // ── 필터 적용 ────────────────────────��─────────────────────
   const filtered = useMemo(() =>
