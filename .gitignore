@@ -45,7 +45,7 @@ build/
 
 # gatsby files
 .cache/
-public
+
 
 # vue-cli-service build build
 dist
