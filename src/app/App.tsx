@@ -142,9 +142,6 @@ export default function App() {
           ...(t.schedule || { interval: t.interval || 30, activeHours: "all", customStart: "09:00", customEnd: "18:00", paused: false })
         }));
         setTargetSchedules(restoredSchedules);
-        if (currentTargetId === null) {
-          setCurrentTargetId(data[0].id);
-        }
       }
     } catch (err) {
       console.error("Failed to load initial targets:", err);
@@ -209,6 +206,10 @@ export default function App() {
     }
     if (tab === "dashboard") {
       setTableExpanded(false);
+      // 대시보드 진입 시마다 항상 첫 번째 사이트 자동 선택
+      if (targets.length > 0) {
+        setCurrentTargetId(targets[0].id);
+      }
     }
     if (tab === "alerts") {
       setSelectedTargetIds([]);
@@ -374,11 +375,25 @@ export default function App() {
         });
         const data = await response.json();
         if (data.success) {
-          // 서버에서 데이터를 다시 불러와 전체 상태를 완벽하게 동기화
-          await fetchInitialData();
+          console.log("삭제 성공! 최신 데이터 불러오는 중...");
+          const res = await fetch('/api/targets');
+          const latestTargets = await res.json();
+          
+          // 1. 전체 targets 상태 업데이트 (새 배열로 할당하여 감지 유도)
+          setTargets([...latestTargets]);
+          
+          // 2. 현재 활성 타겟 수동 갱신 (통계 수치 즉시 반영 핵심)
+          if (currentTargetId === targetId) {
+            setCurrentTargetId(null);
+            setTimeout(() => setCurrentTargetId(targetId), 50);
+          }
+          alert("삭제되었습니다.");
+        } else {
+          alert("삭제에 실패했습니다: " + (data.error || "알 수 없는 오류"));
         }
       } catch (err) {
         console.error("Delete path failed:", err);
+        alert("서버 통신 중 오류가 발생했습니다.");
       }
     }
   };
@@ -543,7 +558,7 @@ export default function App() {
                   key={t.id}
                   className="relative group p-3 border rounded-xl bg-white cursor-pointer transition-all hover:shadow-md"
                   style={
-                    currentTargetId === t.id
+                    currentTargetId === t.id && activeTab === "dashboard"
                       ? { borderColor: C.primary, backgroundColor: C.lightBg, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }
                       : { borderColor: "#f9fafb" }
                   }

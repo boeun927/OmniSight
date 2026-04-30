@@ -2,7 +2,7 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { URL } from 'url';
 
-async function crawlSite(rootUrl, maxPages = 15) {
+async function crawlSite(rootUrl, maxPages = 100) {
   const domain = new URL(rootUrl).hostname;
   const visited = new Set();
   const queue = [rootUrl];
