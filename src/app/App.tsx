@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect } from "react"; 
 import {
   LayoutDashboard,
   PlusCircle,
@@ -128,30 +128,31 @@ export default function App() {
 
   const currentTarget = targets.find((t) => t.id === currentTargetId) || null;
 
+  const fetchInitialData = async () => {
+    try {
+      const res = await fetch('/api/targets');
+      const data = await res.json();
+      setTargets(data);
+      
+      // 백엔드 데이터로 스케줄 상태 복구
+      if (data.length > 0) {
+        const restoredSchedules = data.map((t: any) => ({
+          targetId: t.id,
+          useGlobal: false,
+          ...(t.schedule || { interval: t.interval || 30, activeHours: "all", customStart: "09:00", customEnd: "18:00", paused: false })
+        }));
+        setTargetSchedules(restoredSchedules);
+        if (currentTargetId === null) {
+          setCurrentTargetId(data[0].id);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load initial targets:", err);
+    }
+  };
+
   // ── 0. 초기 데이터 로드 ──────────────────────────────────────
   useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        const res = await fetch('/api/targets');
-        const data = await res.json();
-        setTargets(data);
-        
-        // 백엔드 데이터로 스케줄 상태 복구
-        if (data.length > 0) {
-          const restoredSchedules = data.map((t: any) => ({
-            targetId: t.id,
-            useGlobal: false,
-            ...(t.schedule || { interval: t.interval || 30, activeHours: "all", customStart: "09:00", customEnd: "18:00", paused: false })
-          }));
-          setTargetSchedules(restoredSchedules);
-          if (currentTargetId === null) {
-            setCurrentTargetId(data[0].id);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load initial targets:", err);
-      }
-    };
     fetchInitialData();
   }, []);
 
@@ -363,6 +364,7 @@ export default function App() {
   };
 
   const deletePath = async (targetId: number, path: string) => {
+    console.log("!!! 삭제 버튼 클릭됨 !!!", { targetId, path });
     if (window.confirm(`'${path}' 경로를 삭제하시겠습니까?`)) {
       try {
         const response = await fetch(`/api/targets/${targetId}/path`, {
@@ -372,7 +374,8 @@ export default function App() {
         });
         const data = await response.json();
         if (data.success) {
-          setTargets((prev) => prev.map(t => t.id === targetId ? data.updatedTarget : t));
+          // 서버에서 데이터를 다시 불러와 전체 상태를 완벽하게 동기화
+          await fetchInitialData();
         }
       } catch (err) {
         console.error("Delete path failed:", err);
@@ -380,11 +383,13 @@ export default function App() {
     }
   };
 
-  const stats = currentTarget
+  const latestTarget = targets.find((t) => t.id === currentTargetId) || null;
+
+  const stats = latestTarget
     ? {
-        total: currentTarget.data.length,
-        success: currentTarget.data.filter((d) => d.status === 200).length,
-        broken: currentTarget.data.filter((d) => d.brokenImg).length,
+        total: latestTarget.data.length,
+        success: latestTarget.data.filter((d) => d.status === 200).length,
+        broken: latestTarget.data.filter((d) => d.brokenImg).length,
       }
     : { total: 0, success: 0, broken: 0 };
 
@@ -1367,15 +1372,15 @@ export default function App() {
                     <table className="w-full text-left" style={{ fontSize: "0.75rem" }}>
                       <thead style={{ backgroundColor: "#f9fafb" }}>
                         <tr className="text-gray-400">
-                          {["URL Path", "Status", "Resources", "Response"].map((h) => (
+                          {["URL Path", "Status", "Resources", "Response", ""].map((h) => (
                             <th key={h} className="px-6 py-4 uppercase" style={{ fontWeight: 700, fontSize: "0.65rem" }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y text-gray-600">
-                        {(tableExpanded ? currentTarget.data : currentTarget.data.slice(0, 3)).map((d) => (
+                        {latestTarget && (tableExpanded ? latestTarget.data : latestTarget.data.slice(0, 3)).map((d, idx) => (
                           <tr
-                            key={d.path}
+                            key={`main-row-${d.path}-${idx}`}
                             onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "#f9fafb")}
                             onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "")}
                           >
@@ -1398,6 +1403,28 @@ export default function App() {
                                 : <span className="text-gray-300">OK</span>}
                             </td>
                             <td className="px-6 py-4 text-gray-400 font-mono" style={{ fontSize: "0.625rem" }}>{d.loadTime}</td>
+                            <td className="px-6 py-4 text-right">
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  deletePath(latestTarget.id, d.path); 
+                                }}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all"
+                                style={{ 
+                                  cursor: "pointer", 
+                                  position: "relative", 
+                                  zIndex: 50, 
+                                  pointerEvents: "auto",
+                                  border: "none",
+                                  background: "none"
+                                }}
+                                title="모니터링 대상에서 제외"
+                              >
+                                <Trash2 size={14} style={{ pointerEvents: "none" }} />
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1419,7 +1446,6 @@ export default function App() {
                   targetName={currentTarget.name} 
                   targetId={currentTarget.id} 
                   history={currentTarget.history || []} 
-                  onDeletePath={(path) => deletePath(currentTarget.id, path)}
                 />
               </div>
             )}

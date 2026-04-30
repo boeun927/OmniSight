@@ -15,7 +15,6 @@ import {
   Filter,
   CalendarDays,
   CalendarRange,
-  Trash2,
 } from "lucide-react";
 
 const C = {
@@ -122,10 +121,9 @@ interface Props {
   targetName: string;
   targetId: number;
   history: any[];
-  onDeletePath: (path: string) => void;
 }
 
-export function DailyLogSection({ targetName, targetId, history, onDeletePath }: Props) {
+export function DailyLogSection({ targetName, targetId, history }: Props) {
   const today = toLocalISODate(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("daily");
 
@@ -508,7 +506,7 @@ export function DailyLogSection({ targetName, targetId, history, onDeletePath }:
                         <span className="text-gray-400 ml-auto mr-2" style={{ fontSize: "0.6875rem" }}>평균 {s.avg}</span>
                         {open ? <ChevronUp size={14} className="text-gray-400 flex-shrink-0" /> : <ChevronDown size={14} className="text-gray-400 flex-shrink-0" />}
                       </button>
-                      {open && <TimeDetailTable records={records} onDeletePath={onDeletePath} />}
+                      {open && <TimeDetailTable records={records} />}
                     </div>
                   );
                 })
@@ -628,7 +626,7 @@ export function DailyLogSection({ targetName, targetId, history, onDeletePath }:
                                       <span className="text-gray-400 ml-auto mr-1" style={{ fontSize: "0.625rem" }}>{ss.avg}</span>
                                       {slotOpen ? <ChevronUp size={12} className="text-gray-400 flex-shrink-0" /> : <ChevronDown size={12} className="text-gray-400 flex-shrink-0" />}
                                     </button>
-                                    {slotOpen && <TimeDetailTable records={slotRecords} onDeletePath={onDeletePath} indent />}
+                                    {slotOpen && <TimeDetailTable records={slotRecords} indent />}
                                   </div>
                                 );
                               })}
@@ -696,7 +694,7 @@ export function DailyLogSection({ targetName, targetId, history, onDeletePath }:
 }
 
 // ── 상세 레코드 테이블 (공용) ─────────────────────────────────
-function TimeDetailTable({ records, onDeletePath, indent = false }: { records: DayRecord[]; onDeletePath: (p: string) => void; indent?: boolean }) {
+function TimeDetailTable({ records, indent = false }: { records: DayRecord[]; indent?: boolean }) {
   return (
     <div
       className="overflow-x-auto border-t"
@@ -705,12 +703,12 @@ function TimeDetailTable({ records, onDeletePath, indent = false }: { records: D
       <table className="w-full text-left" style={{ fontSize: "0.75rem" }}>
         <thead>
           <tr className="text-gray-400 border-b" style={{ borderColor: C.lightBd }}>
-            {["URL Path", "Status", "이미지", "응답시간", ""].map((h) => (
+            {["URL Path", "Status", "이미지", "응답시간"].map((h) => (
               <th
                 key={h}
                 className="py-3 uppercase"
                 style={{
-                  paddingLeft: h === "URL Path" && indent ? "3.5rem" : "1.5rem",
+                  paddingLeft: indent ? "3.5rem" : "1.5rem",
                   paddingRight: "1.5rem",
                   fontWeight: 700, fontSize: "0.625rem", letterSpacing: "0.04em",
                 }}
@@ -757,15 +755,6 @@ function TimeDetailTable({ records, onDeletePath, indent = false }: { records: D
                   : <span className="flex items-center gap-1 text-gray-400" style={{ fontSize: "0.6875rem" }}><Image size={12} /> 정상</span>}
               </td>
               <td className="px-6 py-3 text-gray-500 font-mono" style={{ fontSize: "0.6875rem" }}>{r.loadTime}</td>
-              <td className="px-6 py-3 text-right">
-                <button
-                  onClick={() => onDeletePath(r.path)}
-                  className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all"
-                  title="삭제"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </td>
             </tr>
           ))}
         </tbody>
