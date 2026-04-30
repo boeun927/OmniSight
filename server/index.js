@@ -194,6 +194,30 @@ app.delete('/api/targets/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// 4. 특정 타겟 내의 특정 경로 데이터 삭제
+app.delete('/api/targets/:id/path', (req, res) => {
+  const id = parseInt(req.params.id);
+  const { path: pathToDelete } = req.body;
+
+  const targetIndex = targets.findIndex(t => t.id === id);
+  if (targetIndex !== -1) {
+    // 1. 현재 데이터(data)에서 삭제
+    targets[targetIndex].data = targets[targetIndex].data.filter(d => d.path !== pathToDelete);
+    
+    // 2. 히스토리(history) 내의 모든 결과에서도 해당 경로 삭제 (통계 일관성 유지)
+    if (targets[targetIndex].history) {
+      targets[targetIndex].history = targets[targetIndex].history.map(h => ({
+        ...h,
+        results: h.results.filter(r => r.path !== pathToDelete)
+      }));
+    }
+
+    saveData();
+    res.json({ success: true, updatedTarget: targets[targetIndex] });
+  } else {
+    res.status(404).json({ error: 'Target not found' });
+  }
+});
 // 프론트엔드 정적 파일 서빙 (배포용)
 const clientDistPath = path.join(__dirname, '../dist');
 app.use(express.static(clientDistPath));

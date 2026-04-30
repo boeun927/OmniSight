@@ -362,6 +362,24 @@ export default function App() {
     }
   };
 
+  const deletePath = async (targetId: number, path: string) => {
+    if (window.confirm(`'${path}' 경로를 삭제하시겠습니까?`)) {
+      try {
+        const response = await fetch(`/api/targets/${targetId}/path`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path })
+        });
+        const data = await response.json();
+        if (data.success) {
+          setTargets((prev) => prev.map(t => t.id === targetId ? data.updatedTarget : t));
+        }
+      } catch (err) {
+        console.error("Delete path failed:", err);
+      }
+    }
+  };
+
   const stats = currentTarget
     ? {
         total: currentTarget.data.length,
@@ -1397,7 +1415,12 @@ export default function App() {
                 </div>
 
                 {/* 날짜별 모니터링 기록 */}
-                <DailyLogSection targetName={currentTarget.name} targetId={currentTarget.id} history={currentTarget.history || []} />
+                <DailyLogSection 
+                  targetName={currentTarget.name} 
+                  targetId={currentTarget.id} 
+                  history={currentTarget.history || []} 
+                  onDeletePath={(path) => deletePath(currentTarget.id, path)}
+                />
               </div>
             )}
           </div>
