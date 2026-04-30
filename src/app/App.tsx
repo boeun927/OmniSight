@@ -115,6 +115,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collectState, setCollectState] = useState<"idle" | "loading" | "collected">("idle");
   const [collectedUrls, setCollectedUrls] = useState<string[]>([]);
+  const [selectedCollectedUrls, setSelectedCollectedUrls] = useState<string[]>([]);
 
   const [globalSchedule, setGlobalSchedule] = useState<MonitorSchedule>({
     interval: 30,
@@ -202,6 +203,7 @@ export default function App() {
     if (tab === "add") {
       setCollectState("idle");
       setCollectedUrls([]);
+      setSelectedCollectedUrls([]);
       setUrlInput("");
     }
     if (tab === "dashboard") {
@@ -229,7 +231,9 @@ export default function App() {
       const data = await response.json();
       
       if (data.success) {
-        setCollectedUrls(data.results.map((r: any) => r.path));
+        const paths = data.results.map((r: any) => r.path);
+        setCollectedUrls(paths);
+        setSelectedCollectedUrls(paths);
         (window as any)._lastCollection = data;
         setCollectState("collected");
       } else {
@@ -245,6 +249,10 @@ export default function App() {
   const startMonitoring = async () => {
     const url = urlInput.trim();
     if (!url || collectedUrls.length === 0) return;
+    if (selectedCollectedUrls.length === 0) {
+      alert("모니터링할 대상을 하나 이상 선택해 주세요.");
+      return;
+    }
     
     const lastData = (window as any)._lastCollection;
     const finalUrl = lastData?.url || (url.startsWith('http') ? url : 'https://' + url);
@@ -258,7 +266,7 @@ export default function App() {
         body: JSON.stringify({ 
           url: finalUrl,
           name: finalUrl.replace(/^https?:\/\//, "").replace(/^www\./, "").split(".")[0].toUpperCase(),
-          data: lastData?.results || [],
+          data: lastData?.results ? lastData.results.filter((r: any) => selectedCollectedUrls.includes(r.path)) : [],
           interval: globalSchedule.interval,
           schedule: { 
             interval: globalSchedule.interval, 
@@ -283,6 +291,7 @@ export default function App() {
         setImgError(false);
         setCollectState("idle");
         setCollectedUrls([]);
+        setSelectedCollectedUrls([]);
         setActiveTab("dashboard");
       }
     } catch (err) {
@@ -294,6 +303,7 @@ export default function App() {
   const resetCollection = () => {
     setCollectState("idle");
     setCollectedUrls([]);
+    setSelectedCollectedUrls([]);
   };
 
   const selectTarget = (id: number) => {
@@ -716,41 +726,76 @@ export default function App() {
                       className="px-4 py-1.5 rounded-xl flex items-center gap-1.5"
                       style={{ backgroundColor: C.badge, color: C.primary, fontWeight: 700, fontSize: "0.875rem" }}
                     >
-                      총 <strong>{collectedUrls.length}</strong>개 경로 발견
+                      <strong>{selectedCollectedUrls.length}</strong> / {collectedUrls.length} 선택
                     </span>
                   </div>
                 </div>
 
                 {/* URL 목록 */}
                 <div className="px-8 pt-6 pb-4">
-                  <p className="text-gray-400 mb-4 uppercase" style={{ fontSize: "0.6875rem", fontWeight: 700, letterSpacing: "0.07em" }}>
-                    수집된 URL 목록
-                  </p>
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-gray-400 uppercase" style={{ fontSize: "0.6875rem", fontWeight: 700, letterSpacing: "0.07em" }}>
+                      수집된 URL 목록
+                    </p>
+                    <label className="flex items-center gap-2 cursor-pointer text-gray-600" style={{ fontSize: "0.75rem", fontWeight: 600 }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedCollectedUrls.length === collectedUrls.length && collectedUrls.length > 0}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedCollectedUrls([...collectedUrls]);
+                          } else {
+                            setSelectedCollectedUrls([]);
+                          }
+                        }}
+                        className="w-3.5 h-3.5 rounded"
+                        style={{ accentColor: C.primary }}
+                      />
+                      전체 선택
+                    </label>
+                  </div>
                   <div
                     className="space-y-2 overflow-y-auto pr-1"
                     style={{ maxHeight: "300px", scrollbarWidth: "thin", scrollbarColor: `${C.lightBd} transparent` }}
                   >
-                    {collectedUrls.map((path, idx) => (
-                      <div
-                        key={path}
-                        className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors"
-                        style={{ backgroundColor: "#f9fafb" }}
-                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = C.lightBg)}
-                        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "#f9fafb")}
-                      >
-                        <span
-                          className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center"
-                          style={{ backgroundColor: C.badge, color: C.primary, fontSize: "0.5625rem", fontWeight: 900 }}
+                    {collectedUrls.map((path, idx) => {
+                      const isSelected = selectedCollectedUrls.includes(path);
+                      return (
+                        <div
+                          key={path}
+                          className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors cursor-pointer"
+                          style={{ backgroundColor: isSelected ? "#f9fafb" : "#ffffff", border: `1px solid ${isSelected ? "transparent" : "#f3f4f6"}` }}
+                          onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = C.lightBg)}
+                          onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = isSelected ? "#f9fafb" : "#ffffff")}
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedCollectedUrls(prev => prev.filter(p => p !== path));
+                            } else {
+                              setSelectedCollectedUrls(prev => [...prev, path]);
+                            }
+                          }}
                         >
-                          {String(idx + 1).padStart(2, "0")}
-                        </span>
-                        <span className="flex-1 font-mono text-gray-600" style={{ fontSize: "0.8125rem" }}>
-                          <span className="text-gray-400">https://{urlInput.trim()}</span>
-                          <span style={{ fontWeight: 700, color: "#374151" }}>{path}</span>
-                        </span>
-                        <ChevronRight size={14} className="text-gray-300 flex-shrink-0" />
-                      </div>
-                    ))}
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}} // 부모 div의 onClick에서 처리
+                            className="w-4 h-4 rounded flex-shrink-0"
+                            style={{ accentColor: C.primary, pointerEvents: "none" }}
+                          />
+                          <span
+                            className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center"
+                            style={{ backgroundColor: isSelected ? C.badge : "#f3f4f6", color: isSelected ? C.primary : "#9ca3af", fontSize: "0.5625rem", fontWeight: 900 }}
+                          >
+                            {String(idx + 1).padStart(2, "0")}
+                          </span>
+                          <span className="flex-1 font-mono text-gray-600" style={{ fontSize: "0.8125rem", opacity: isSelected ? 1 : 0.5 }}>
+                            <span className="text-gray-400">https://{urlInput.trim()}</span>
+                            <span style={{ fontWeight: 700, color: "#374151" }}>{path}</span>
+                          </span>
+                          <ChevronRight size={14} className="text-gray-300 flex-shrink-0" />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
