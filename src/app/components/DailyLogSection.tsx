@@ -37,6 +37,7 @@ type DayRecord = {
   path: string;
   status: number;
   brokenImg: boolean;
+  brokenImages?: string[]; // 상세 URL 목록 추가
   loadTime: string;
 };
 
@@ -140,9 +141,6 @@ export function DailyLogSection({ targetName, targetId, history }: Props) {
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [expandedSlot, setExpandedSlot] = useState<string | null>(null); // "HH:MM" (daily) or "DATE::HH:MM" (multi-day)
 
-  // 필터
-  const [filterPath, setFilterPath] = useState<string>("all");
-  const [filterStatus, setFilterStatus] = useState<"all" | "ok" | "err">("all");
 
   // 페이지 (daily=시간슬롯 페이지, multi=날짜 페이지)
   const [page, setPage] = useState(1);
@@ -168,22 +166,13 @@ export function DailyLogSection({ targetName, targetId, history }: Props) {
         path: r.path,
         status: r.status,
         brokenImg: r.brokenImg,
+        brokenImages: r.brokenImages || [],
         loadTime: r.loadTime
       }));
     });
   }, [history]);
 
   // ── 필터 적용 ────────────────────────��─────────────────────
-  const filtered = useMemo(() =>
-    allRecords.filter((r) => {
-      const pOk = filterPath === "all" || r.path === filterPath;
-      const sOk = filterStatus === "all" || (filterStatus === "ok" ? r.status === 200 : r.status !== 200);
-      return pOk && sOk;
-    }),
-    [allRecords, filterPath, filterStatus]
-  );
-
-  const paths = useMemo(() => ["all", ...Array.from(new Set(allRecords.map((r) => r.path)))], [allRecords]);
 
   // ── 전체 통계 ──────────────────────────────────────────────
   const stats = useMemo(() => daySummary(allRecords), [allRecords]);
@@ -270,19 +259,18 @@ export function DailyLogSection({ targetName, targetId, history }: Props) {
   const timeGroups = useMemo(() => {
     if (viewMode !== "daily") return [];
     const map: Record<string, DayRecord[]> = {};
-    filtered.forEach((r) => { if (!map[r.time]) map[r.time] = []; map[r.time].push(r); });
+    allRecords.forEach((r) => { if (!map[r.time]) map[r.time] = []; map[r.time].push(r); });
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
-  }, [viewMode, filtered]);
+  }, [viewMode, allRecords]);
 
   // ── 멀티 모드: 날짜 그룹 ───────────────────────────────────
   const dateGroups = useMemo(() => {
     if (viewMode === "daily") return [];
     return dateRange.map((dateStr) => {
       const dayAll = allRecords.filter((r) => r.date === dateStr);
-      const dayFiltered = filtered.filter((r) => r.date === dateStr);
-      return { dateStr, dayAll, dayFiltered };
+      return { dateStr, dayAll, dayFiltered: dayAll };
     });
-  }, [viewMode, dateRange, allRecords, filtered]);
+  }, [viewMode, dateRange, allRecords]);
 
   // 페이지네이션
   const items = viewMode === "daily" ? timeGroups : dateGroups;
@@ -316,7 +304,7 @@ export function DailyLogSection({ targetName, targetId, history }: Props) {
             {MODE_TABS.map(({ id, label, icon }) => (
               <button
                 key={id}
-                onClick={() => { setViewMode(id); resetPage(); setFilterPath("all"); setFilterStatus("all"); }}
+                onClick={() => { setViewMode(id); resetPage(); }}
                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-all whitespace-nowrap"
                 style={{
                   fontSize: "0.6875rem", fontWeight: 700,
@@ -423,44 +411,6 @@ export function DailyLogSection({ targetName, targetId, history }: Props) {
         ))}
       </div>
 
-      {/* ── 필터 바 ───────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-3 px-6 py-3 border-b border-gray-100 bg-gray-50">
-        <Filter size={13} className="text-gray-400 flex-shrink-0" />
-        <div className="flex flex-wrap gap-1.5">
-          {paths.map((p) => (
-            <button
-              key={p}
-              onClick={() => { setFilterPath(p); setPage(1); }}
-              className="px-2.5 py-1 rounded-lg transition-all"
-              style={{
-                fontSize: "0.6875rem", fontWeight: 700,
-                backgroundColor: filterPath === p ? C.primary : "#f3f4f6",
-                color: filterPath === p ? "#fff" : "#6b7280",
-              }}
-            >
-              {p === "all" ? "전체 경로" : p}
-            </button>
-          ))}
-        </div>
-        <div className="w-px h-4 bg-gray-200 flex-shrink-0" />
-        {(["all", "ok", "err"] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => { setFilterStatus(s); setPage(1); }}
-            className="px-2.5 py-1 rounded-lg transition-all"
-            style={{
-              fontSize: "0.6875rem", fontWeight: 700,
-              backgroundColor: filterStatus === s ? (s === "ok" ? "#16a34a" : s === "err" ? "#dc2626" : C.primary) : "#f3f4f6",
-              color: filterStatus === s ? "#fff" : "#6b7280",
-            }}
-          >
-            {s === "all" ? "전체 상태" : s === "ok" ? "정상만" : "오류만"}
-          </button>
-        ))}
-        <span className="ml-auto text-gray-400" style={{ fontSize: "0.6875rem" }}>
-          {filtered.length.toLocaleString()}건 조회됨
-        </span>
-      </div>
 
       {/* ── 테이블 영역 ───────────────────────────────────────── */}
       {dateRange.length === 0 ? (
@@ -749,9 +699,27 @@ function TimeDetailTable({ records, indent = false }: { records: DayRecord[]; in
                   </span>
                 </span>
               </td>
-              <td className="px-6 py-3">
+              <td className="px-6 py-3 relative group/img">
                 {r.brokenImg
-                  ? <span className="flex items-center gap-1 text-yellow-600" style={{ fontWeight: 700, fontSize: "0.6875rem" }}><ImageOff size={12} /> 이상</span>
+                  ? (
+                    <>
+                      <span className="flex items-center gap-1 text-red-500 cursor-help" style={{ fontWeight: 700, fontSize: "0.6875rem" }}>
+                        <ImageOff size={12} /> 장애 ({r.brokenImages?.length || 1})
+                      </span>
+                      {/* 히스토리용 툴팁 */}
+                      <div className="absolute z-[60] left-0 bottom-full mb-1 hidden group-hover/img:block bg-gray-900 text-white p-3 rounded-xl shadow-2xl min-w-[240px] max-w-[400px]">
+                        <p className="text-[0.625rem] font-bold mb-2 border-b border-gray-700 pb-1 text-red-400">장애 이미지 URL</p>
+                        <ul className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
+                          {(r.brokenImages || []).map((url: string, i: number) => (
+                            <li key={i} className="text-[0.5625rem] font-mono break-all opacity-80 hover:opacity-100 flex gap-1.5">
+                              <span className="text-red-400 font-bold">•</span>
+                              {url}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </>
+                  )
                   : <span className="flex items-center gap-1 text-gray-400" style={{ fontSize: "0.6875rem" }}><Image size={12} /> 정상</span>}
               </td>
               <td className="px-6 py-3 text-gray-500 font-mono" style={{ fontSize: "0.6875rem" }}>{r.loadTime}</td>

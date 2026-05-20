@@ -2,11 +2,19 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { URL } from 'url';
 
-async function crawlSite(rootUrl, maxPages = 100) {
-  const domain = new URL(rootUrl).hostname;
+async function crawlSite(rootUrl, maxPages = 300) {
+  let normalizedRoot = rootUrl;
+  if (!normalizedRoot.endsWith('/') && !normalizedRoot.split('/').pop().includes('.')) {
+    normalizedRoot += '/';
+  }
+
+  const domain = new URL(normalizedRoot).hostname;
   const visited = new Set();
-  const queue = [rootUrl];
+  const queue = [normalizedRoot];
   const results = [];
+
+  // 제외할 확장자 목록
+  const IGNORED_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.svg', '.css', '.js', '.woff', '.woff2', '.ttf', '.eot', '.mp4', '.webm', '.zip', '.tar', '.gz'];
 
   while (queue.length > 0 && visited.size < maxPages) {
     const currentUrl = queue.shift();
@@ -14,9 +22,15 @@ async function crawlSite(rootUrl, maxPages = 100) {
     visited.add(currentUrl);
 
     try {
-      console.log(`Crawling: ${currentUrl}`);
+      console.log(`[Crawler] Crawling: ${currentUrl}`);
       const startTime = Date.now();
-      const response = await axios.get(currentUrl, { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const response = await axios.get(currentUrl, { 
+        timeout: 10000, 
+        headers: { 
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
+        } 
+      });
       const loadTime = ((Date.now() - startTime) / 1000).toFixed(2);
       const $ = cheerio.load(response.data);
       
@@ -24,10 +38,11 @@ async function crawlSite(rootUrl, maxPages = 100) {
         path: new URL(currentUrl).pathname,
         status: response.status,
         loadTime: loadTime + 's',
-        brokenImg: false
+        brokenImg: false,
+        brokenImages: [] // 깨진 이미지 URL 목록 추가
       };
 
-      // Check for broken images
+      // Check for broken images (limited to first 10 for performance)
       const images = [];
       $('img').each((i, el) => {
         const src = $(el).attr('src');
@@ -38,12 +53,17 @@ async function crawlSite(rootUrl, maxPages = 100) {
         }
       });
 
-      for (const imgSrc of images.slice(0, 5)) {
+      for (const imgSrc of images.slice(0, 10)) {
         try {
-          await axios.head(imgSrc, { timeout: 3000 });
+          // Use GET with a small timeout and high-level headers to avoid being blocked
+          await axios.get(imgSrc, { 
+            timeout: 5000, 
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            responseType: 'stream' // Don't download the whole image
+          });
         } catch (err) {
           pageInfo.brokenImg = true;
-          break;
+          pageInfo.brokenImages.push(imgSrc);
         }
       }
 
@@ -52,20 +72,40 @@ async function crawlSite(rootUrl, maxPages = 100) {
       // Find sub-links
       $('a').each((i, el) => {
         let href = $(el).attr('href');
-        if (href) {
-          try {
-            const absoluteUrl = new URL(href, currentUrl).href;
-            const hrefUrl = new URL(absoluteUrl);
-            if (hrefUrl.hostname === domain && !visited.has(absoluteUrl) && !queue.includes(absoluteUrl)) {
-              queue.push(absoluteUrl);
-            }
-          } catch (e) {}
+        if (!href) return;
+
+        // Skip non-page links
+        if (href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('#')) {
+          return;
         }
+
+        try {
+          const absoluteUrl = new URL(href, currentUrl).href.split('#')[0]; // Remove hash
+          const hrefUrl = new URL(absoluteUrl);
+          const pathname = hrefUrl.pathname.toLowerCase();
+
+          // Check extensions
+          if (IGNORED_EXTENSIONS.some(ext => pathname.endsWith(ext))) {
+            return;
+          }
+
+          // Only same domain and not visited/queued
+          if (hrefUrl.hostname === domain && !visited.has(absoluteUrl) && !queue.includes(absoluteUrl)) {
+            // Prioritize links in menu containers
+            const isMenu = $(el).closest('nav, header, [class*="menu"], [id*="menu"], [class*="nav"], [id*="nav"], [class*="gnb"], [id*="gnb"]').length > 0;
+            if (isMenu) {
+              queue.unshift(absoluteUrl); // Put at front
+            } else {
+              queue.push(absoluteUrl); // Put at back
+            }
+          }
+        } catch (e) {}
       });
     } catch (error) {
+      console.error(`[Crawler Error] ${currentUrl}:`, error.message);
       results.push({
         path: new URL(currentUrl).pathname,
-        status: error.response ? error.response.status : 500,
+        status: error.response ? error.response.status : (error.code === 'ECONNABORTED' ? 408 : 500),
         loadTime: '0.00s',
         brokenImg: false
       });

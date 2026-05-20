@@ -34,6 +34,9 @@ import {
   Menu,
   X,
   Globe,
+  Copy,
+  ExternalLink,
+  Save,
 } from "lucide-react";
 import { OmniSightLogo } from "./components/OmniSightLogo";
 import { DailyLogSection } from "./components/DailyLogSection";
@@ -92,16 +95,6 @@ type TargetSchedule = {
 
 type TabName = "guide" | "dashboard" | "add" | "schedule" | "alerts";
 
-function generateMockData(): PageData[] {
-  const paths = ["/", "/login", "/shop", "/api/v2", "/cart"];
-  return paths.map((p) => ({
-    path: p,
-    status: Math.random() > 0.05 ? 200 : 404,
-    brokenImg: Math.random() > 0.85,
-    loadTime: (Math.random() * 1.5 + 0.2).toFixed(2) + "s",
-  }));
-}
-
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabName>("guide");
   const [targets, setTargets] = useState<Target[]>([]);
@@ -154,30 +147,48 @@ export default function App() {
   }, []);
 
   // ── 1. 스케줄 동기화 (Auto-save) ──────────────────────────────
-  useEffect(() => {
-    if (targets.length === 0 || targetSchedules.length === 0) return;
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
-    // 글로벌 설정이 체크된 타겟은 글로벌 값을 덮어씌움
-    const schedulesToSync = targetSchedules.map(sched => {
-      if (sched.useGlobal) {
-        return {
-          ...sched,
-          interval: globalSchedule.interval,
-          activeHours: globalSchedule.activeHours,
-          customStart: globalSchedule.customStart,
-          customEnd: globalSchedule.customEnd,
-          paused: globalSchedule.globalPaused
-        };
+  const handleSaveSchedule = async () => {
+    if (targets.length === 0) {
+      alert("등록된 사이트가 없습니다.");
+      return;
+    }
+
+    setIsSavingSchedule(true);
+    try {
+      const schedulesToSync = targetSchedules.map(sched => {
+        if (sched.useGlobal) {
+          return {
+            ...sched,
+            interval: globalSchedule.interval,
+            activeHours: globalSchedule.activeHours,
+            customStart: globalSchedule.customStart,
+            customEnd: globalSchedule.customEnd,
+            paused: globalSchedule.globalPaused
+          };
+        }
+        return sched;
+      });
+
+      const res = await fetch('/api/schedule', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schedules: schedulesToSync })
+      });
+
+      if (res.ok) {
+        alert("모니터링 스케줄이 저장 및 적용되었습니다.");
+      } else {
+        alert("저장에 실패했습니다.");
       }
-      return sched;
-    });
-
-    fetch('/api/schedule', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ schedules: schedulesToSync })
-    }).catch(err => console.error("Schedule sync error:", err));
-  }, [globalSchedule, targetSchedules]);
+    } catch (err) {
+      console.error("Save schedule error:", err);
+      alert("서버 통신 중 오류가 발생했습니다.");
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  };
 
   // ── 2. 대시보드 활성 시 주기적으로 데이터 업데이트 (Polling) ──
   useEffect(() => {
@@ -219,6 +230,31 @@ export default function App() {
     setSidebarOpen(false);
   };
 
+  const isWithinActiveHours = (schedule: any) => {
+    if (schedule.activeHours === 'all') return true;
+    const now = new Date();
+    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    if (schedule.activeHours === 'business') return currentTime >= '09:00' && currentTime <= '18:00';
+    if (schedule.activeHours === 'custom') return currentTime >= (schedule.customStart || '00:00') && currentTime <= (schedule.customEnd || '23:59');
+    return true;
+  };
+
+  const getTargetStatusInfo = (targetId: number) => {
+    const ts = getTargetSchedule(targetId);
+    if (globalSchedule.globalPaused || ts.paused) {
+      return { label: 'PAUSED', color: '#6b7280', dot: '#9ca3af', bg: '#f3f4f6' };
+    }
+    if (!isWithinActiveHours(ts.useGlobal ? globalSchedule : ts)) {
+      return { label: 'OFF-HOURS', color: '#92400e', dot: '#f59e0b', bg: '#fef9c3' };
+    }
+    return { label: 'ACTIVE', color: '#15803d', dot: '#22c55e', bg: '#dcfce7' };
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert("주소가 클립보드에 복사되었습니다.");
+  };
+
   const collectTargetUrls = async () => {
     const url = urlInput.trim();
     if (!url) { alert("URL을 입력해 주세요."); return; }
@@ -233,6 +269,11 @@ export default function App() {
       const data = await response.json();
       
       if (data.success) {
+        if (!data.results || data.results.length === 0) {
+          alert("수집된 페이지가 없습니다. URL이 정확한지 또는 접근 가능한지 확인해 주세요.");
+          setCollectState("idle");
+          return;
+        }
         const paths = data.results.map((r: any) => r.path);
         setCollectedUrls(paths);
         setSelectedCollectedUrls(paths);
@@ -553,48 +594,51 @@ export default function App() {
                 사이트를 추가해 주세요
               </div>
             ) : (
-              targets.map((t) => (
-                <div
-                  key={t.id}
-                  className="relative group p-3 border rounded-xl bg-white cursor-pointer transition-all hover:shadow-md"
-                  style={
-                    currentTargetId === t.id && activeTab === "dashboard"
-                      ? { borderColor: C.primary, backgroundColor: C.lightBg, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }
-                      : { borderColor: "#f9fafb" }
-                  }
-                  onClick={() => selectTarget(t.id)}
-                >
-                  {/* 사이트 정보 */}
-                  <div className="flex items-center gap-2 mb-1 pr-5">
-                    <span
-                      className="flex-shrink-0"
-                      style={{ height: 7, width: 7, borderRadius: "50%", backgroundColor: "#22c55e", display: "inline-block" }}
-                    />
-                    <span className="truncate" style={{ fontWeight: 700, fontSize: "0.75rem", letterSpacing: "-0.01em" }}>
-                      {t.name}
-                    </span>
-                  </div>
-                  <div className="truncate text-gray-400 pl-3.5" style={{ fontSize: "0.5625rem" }}>{t.url}</div>
-
-                  {/* 삭제 버튼 — hover 시 표시 */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); deleteTarget(t.id); }}
-                    title="삭제"
-                    className="absolute top-2 right-2 flex items-center justify-center rounded-md transition-all"
-                    style={{ width: 20, height: 20, backgroundColor: "transparent", color: "#9ca3af" }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = "#fee2e2";
-                      (e.currentTarget as HTMLElement).style.color = "#ef4444";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                      (e.currentTarget as HTMLElement).style.color = "#9ca3af";
-                    }}
+              targets.map((t) => {
+                const sInfo = getTargetStatusInfo(t.id);
+                return (
+                  <div
+                    key={t.id}
+                    className="relative group p-3 border rounded-xl bg-white cursor-pointer transition-all hover:shadow-md"
+                    style={
+                      currentTargetId === t.id && activeTab === "dashboard"
+                        ? { borderColor: C.primary, backgroundColor: C.lightBg, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }
+                        : { borderColor: "#f9fafb" }
+                    }
+                    onClick={() => selectTarget(t.id)}
                   >
-                    <Trash2 size={11} />
-                  </button>
-                </div>
-              ))
+                    {/* 사이트 정보 */}
+                    <div className="flex items-center gap-2 mb-1 pr-5">
+                      <span
+                        className="flex-shrink-0"
+                        style={{ height: 7, width: 7, borderRadius: "50%", backgroundColor: sInfo.dot, display: "inline-block" }}
+                      />
+                      <span className="truncate" style={{ fontWeight: 700, fontSize: "0.75rem", letterSpacing: "-0.01em" }}>
+                        {t.name}
+                      </span>
+                    </div>
+                    <div className="truncate text-gray-400 pl-3.5" style={{ fontSize: "0.5625rem" }}>{t.url}</div>
+
+                    {/* 삭제 버튼 — hover 시 표시 */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteTarget(t.id); }}
+                      title="삭제"
+                      className="absolute top-2 right-2 flex items-center justify-center rounded-md transition-all"
+                      style={{ width: 20, height: 20, backgroundColor: "transparent", color: "#9ca3af" }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = "#fee2e2";
+                        (e.currentTarget as HTMLElement).style.color = "#ef4444";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                        (e.currentTarget as HTMLElement).style.color = "#9ca3af";
+                      }}
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
@@ -719,10 +763,10 @@ export default function App() {
                 </div>
 
                 <div className="text-center">
-                  <p style={{ fontWeight: 700, fontSize: "1.125rem", color: "#111827" }}>URL 수집 중...</p>
+                  <p style={{ fontWeight: 700, fontSize: "1.125rem", color: "#111827" }}>실제 메뉴 경로 수집 중...</p>
                   <p className="text-gray-400 mt-1.5" style={{ fontSize: "0.875rem" }}>
                     <span className="font-mono" style={{ color: C.primary }}>https://{urlInput.trim()}</span>
-                    {" "}에서 경로를 탐색하고 있습니다
+                    {" "}에서 가짜 데이터를 제외한 실제 페이지만 선별하고 있습니다
                   </p>
                 </div>
 
@@ -798,10 +842,11 @@ export default function App() {
                   >
                     {collectedUrls.map((path, idx) => {
                       const isSelected = selectedCollectedUrls.includes(path);
+                      const fullUrl = `https://${urlInput.trim()}${path}`;
                       return (
                         <div
                           key={path}
-                          className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors cursor-pointer"
+                          className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors cursor-pointer group"
                           style={{ backgroundColor: isSelected ? "#f9fafb" : "#ffffff", border: `1px solid ${isSelected ? "transparent" : "#f3f4f6"}` }}
                           onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = C.lightBg)}
                           onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = isSelected ? "#f9fafb" : "#ffffff")}
@@ -867,19 +912,30 @@ export default function App() {
         {activeTab === "schedule" && (
           <div className="p-10 max-w-5xl mx-auto">
             {/* 헤더 */}
-            <div className="flex items-center gap-4 mb-10">
-              <div
-                className="w-12 h-12 text-white rounded-2xl flex items-center justify-center flex-shrink-0"
-                style={{ backgroundColor: C.primary, boxShadow: `0 10px 25px ${C.shadow}` }}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10">
+              <div className="flex items-center gap-4">
+                <div
+                  className="w-12 h-12 text-white rounded-2xl flex items-center justify-center flex-shrink-0"
+                  style={{ backgroundColor: C.primary, boxShadow: `0 10px 25px ${C.shadow}` }}
+                >
+                  <CalendarClock size={22} />
+                </div>
+                <div>
+                  <h2 className="text-gray-800" style={{ fontSize: "1.5rem", fontWeight: 700 }}>모니터링 주기 관리</h2>
+                  <p className="text-gray-500" style={{ fontSize: "0.875rem" }}>
+                    전체 기본값과 사이트별 개별 주기를 설정하세요.
+                  </p>
+                </div>
+              </div>
+              
+              <button
+                onClick={handleSaveSchedule}
+                disabled={isSavingSchedule}
+                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl text-white transition-all shadow-lg hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                style={{ backgroundColor: C.primary, fontWeight: 700, fontSize: "0.9375rem" }}
               >
-                <CalendarClock size={22} />
-              </div>
-              <div>
-                <h2 className="text-gray-800" style={{ fontSize: "1.5rem", fontWeight: 700 }}>모니터링 주기 관리</h2>
-                <p className="text-gray-500" style={{ fontSize: "0.875rem" }}>
-                  전체 기본값과 사이트별 개별 주기를 설정하세요.
-                </p>
-              </div>
+                <Save size={18} /> {isSavingSchedule ? "저장 중..." : "설정 저장 및 적용"}
+              </button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1307,19 +1363,62 @@ export default function App() {
                       <h2 className="text-gray-900" style={{ fontSize: "1.875rem", fontWeight: 900 }}>
                         {currentTarget.name}
                       </h2>
-                      <span
-                        className="px-3 py-1 rounded-full flex items-center gap-1.5"
-                        style={{ backgroundColor: "#dcfce7", color: "#15803d", fontSize: "0.75rem", fontWeight: 700 }}
-                      >
-                        <span style={{ height: 8, width: 8, borderRadius: "50%", backgroundColor: "#22c55e", display: "inline-block" }} />{" "}
-                        ACTIVE
-                      </span>
+                      {(() => {
+                        const sInfo = getTargetStatusInfo(currentTarget.id);
+                        return (
+                          <span
+                            className="px-3 py-1 rounded-full flex items-center gap-1.5"
+                            style={{ backgroundColor: sInfo.bg, color: sInfo.color, fontSize: "0.75rem", fontWeight: 700 }}
+                          >
+                            <span style={{ height: 8, width: 8, borderRadius: "50%", backgroundColor: sInfo.dot, display: "inline-block" }} />{" "}
+                            {sInfo.label}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <p className="text-gray-500 flex items-center gap-2">
                       <Link size={12} />
                       <span>{currentTarget.url}</span>
                     </p>
                   </div>
+
+                  {/* 추가: 현재 모니터링 설정 요약 */}
+                  {(() => {
+                    const ts = getTargetSchedule(currentTarget.id);
+                    const effectiveInterval = ts.useGlobal ? globalSchedule.interval : ts.interval;
+                    const intervalLabel = intervalOptions.find(o => o.value === effectiveInterval)?.label || `${effectiveInterval}분`;
+                    const effectiveHoursLabel = ts.useGlobal
+                      ? (globalSchedule.activeHours === "all" ? "24시간 상시"
+                        : globalSchedule.activeHours === "business" ? "09:00 ~ 18:00"
+                        : `${globalSchedule.customStart} ~ ${globalSchedule.customEnd}`)
+                      : (ts.activeHours === "all" ? "24시간 상시"
+                        : ts.activeHours === "business" ? "09:00 ~ 18:00"
+                        : `${ts.customStart} ~ ${ts.customEnd}`);
+
+                    return (
+                      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-6 py-4 rounded-2xl border bg-gray-50/50" style={{ borderColor: '#f3f4f6' }}>
+                        <div className="flex items-center gap-2">
+                          <Clock size={14} className="text-gray-400" />
+                          <span className="text-gray-400 font-bold" style={{ fontSize: '0.625rem', letterSpacing: '0.05em' }}>INTERVAL</span>
+                          <span className="text-gray-700 font-extrabold" style={{ fontSize: '0.8125rem' }}>{intervalLabel}</span>
+                        </div>
+                        <div className="hidden sm:block w-px h-4 bg-gray-200" />
+                        <div className="flex items-center gap-2">
+                          <CalendarClock size={14} className="text-gray-400" />
+                          <span className="text-gray-400 font-bold" style={{ fontSize: '0.625rem', letterSpacing: '0.05em' }}>ACTIVE HOURS</span>
+                          <span className="text-gray-700 font-extrabold" style={{ fontSize: '0.8125rem' }}>{effectiveHoursLabel}</span>
+                        </div>
+                        <div className="hidden sm:block w-px h-4 bg-gray-200" />
+                        <div className="flex items-center gap-2">
+                          <Settings2 size={14} className="text-gray-400" />
+                          <span className="text-gray-400 font-bold" style={{ fontSize: '0.625rem', letterSpacing: '0.05em' }}>MODE</span>
+                          <span className="px-2 py-0.5 rounded-md text-white font-black" style={{ fontSize: '0.5625rem', backgroundColor: ts.useGlobal ? '#9ca3af' : C.primary }}>
+                            {ts.useGlobal ? 'GLOBAL' : 'INDIVIDUAL'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* 통계 카드 4개 + Visual Health — 한 줄 */}
@@ -1396,10 +1495,33 @@ export default function App() {
                         {latestTarget && (tableExpanded ? latestTarget.data : latestTarget.data.slice(0, 3)).map((d, idx) => (
                           <tr
                             key={`main-row-${d.path}-${idx}`}
+                            className="group transition-colors"
                             onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "#f9fafb")}
                             onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = "")}
                           >
-                            <td className="px-6 py-4 text-gray-800" style={{ fontWeight: 700 }}>{d.path}</td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-800" style={{ fontWeight: 700 }}>{d.path}</span>
+                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button 
+                                    onClick={() => copyToClipboard((currentTarget.url.endsWith('/') ? currentTarget.url.slice(0, -1) : currentTarget.url) + d.path)}
+                                    className="p-1 hover:bg-white border border-transparent hover:border-gray-200 rounded text-gray-400 hover:text-primary transition-all"
+                                    title="주소 복사"
+                                  >
+                                    <Copy size={12} />
+                                  </button>
+                                  <a 
+                                    href={(currentTarget.url.endsWith('/') ? currentTarget.url.slice(0, -1) : currentTarget.url) + d.path} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="p-1 hover:bg-white border border-transparent hover:border-gray-200 rounded text-gray-400 hover:text-primary transition-all"
+                                    title="새 창에서 열기"
+                                  >
+                                    <ExternalLink size={12} />
+                                  </a>
+                                </div>
+                              </div>
+                            </td>
                             <td className="px-6 py-4">
                               <span
                                 className="px-2 py-0.5 rounded-full"
@@ -1412,9 +1534,30 @@ export default function App() {
                                 {d.status}
                               </span>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-6 py-4 relative group/img">
                               {d.brokenImg
-                                ? <span className="text-red-500" style={{ fontWeight: 700 }}>Broken</span>
+                                ? (
+                                  <>
+                                    <span className="text-red-500 cursor-help" style={{ fontWeight: 700 }}>
+                                      Broken ({d.brokenImages?.length || 1})
+                                    </span>
+                                    {/* 툴팁 */}
+                                    <div className="absolute z-[60] left-0 top-full mt-1 hidden group-hover/img:block bg-gray-900 text-white p-3 rounded-xl shadow-2xl min-w-[240px] max-w-[400px]">
+                                      <p className="text-[0.625rem] font-bold mb-2 border-b border-gray-700 pb-1 text-red-400">발견된 장애 이미지 목록</p>
+                                      <ul className="space-y-1.5 max-h-[150px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
+                                        {(d.brokenImages || []).map((url: string, i: number) => (
+                                          <li key={i} className="text-[0.5625rem] font-mono break-all opacity-80 hover:opacity-100 flex gap-1.5">
+                                            <span className="text-red-400 font-bold">•</span>
+                                            {url}
+                                          </li>
+                                        ))}
+                                        {(!d.brokenImages || d.brokenImages.length === 0) && (
+                                          <li className="text-[0.5625rem] italic opacity-50">상세 URL을 불러올 수 없습니다.</li>
+                                        )}
+                                      </ul>
+                                    </div>
+                                  </>
+                                )
                                 : <span className="text-gray-300">OK</span>}
                             </td>
                             <td className="px-6 py-4 text-gray-400 font-mono" style={{ fontSize: "0.625rem" }}>{d.loadTime}</td>

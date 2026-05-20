@@ -122,7 +122,7 @@ app.post('/api/discover', async (req, res) => {
     if (!targetUrl.startsWith('http')) targetUrl = 'https://' + targetUrl;
     
     console.log(`[Discover] Crawling: ${targetUrl}`);
-    const results = await crawlSite(targetUrl, 100);
+    const results = await crawlSite(targetUrl, 300);
     res.json({ success: true, url: targetUrl, results });
   } catch (error) {
     console.error('[Discover Error]', error.message);
@@ -144,7 +144,7 @@ app.post('/api/targets', (req, res) => {
     schedule: schedule || { interval, paused: false, activeHours: 'all' },
     timestamp: getCurrentTime(),
     history: [{ timestamp: getCurrentTime(), results: data }],
-    previewUrl: `https://s.wordpress.com/mshots/v1/${encodeURIComponent(url)}?w=1024`
+    previewUrl: `https://image.thum.io/get/width/1024/crop/800/${url.startsWith('http') ? url : 'https://' + url}`
   };
 
   targets.push(newTarget);
