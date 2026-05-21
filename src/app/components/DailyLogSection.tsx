@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { ReactNode } from "react";
 import {
   Calendar,
@@ -147,6 +147,15 @@ export function DailyLogSection({ targetName, targetId, history }: Props) {
   const PAGE_SIZE = viewMode === "daily" ? 8 : 10;
 
   const resetPage = () => { setPage(1); setExpandedDate(null); setExpandedSlot(null); };
+
+  // 타겟 변경 시 상태 새로고침 및 최신 페이지(1p) 이동
+  useEffect(() => {
+    setViewMode("daily");
+    setSelectedDate(today);
+    setSelectedYear(new Date().getFullYear());
+    setSelectedMonth(new Date().getMonth() + 1);
+    resetPage();
+  }, [targetId]);
 
   // ── 날짜 범위 ──────────────────────────────────────────────
   const dateRange = useMemo(
