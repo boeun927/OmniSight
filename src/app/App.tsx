@@ -127,13 +127,31 @@ export default function App() {
       const data = await res.json();
       setTargets(data);
       
-      // 백엔드 데이터로 스케줄 상태 복구
+      // 백엔드 데이터로 스케줄 상태 복구 (useGlobal 포함)
       if (data.length > 0) {
-        const restoredSchedules = data.map((t: any) => ({
-          targetId: t.id,
-          useGlobal: false,
-          ...(t.schedule || { interval: t.interval || 30, activeHours: "all", customStart: "09:00", customEnd: "18:00", paused: false })
-        }));
+        const restoredSchedules = data.map((t: any) => {
+          const saved = t.schedule;
+          if (saved) {
+            return {
+              targetId: t.id,
+              useGlobal: saved.useGlobal ?? true, // 서버에 저장된 useGlobal 값 우선 사용
+              interval: saved.interval ?? globalSchedule.interval,
+              activeHours: saved.activeHours ?? "all",
+              customStart: saved.customStart ?? "09:00",
+              customEnd: saved.customEnd ?? "18:00",
+              paused: saved.paused ?? false,
+            };
+          }
+          return {
+            targetId: t.id,
+            useGlobal: true,
+            interval: t.interval || globalSchedule.interval,
+            activeHours: "all",
+            customStart: "09:00",
+            customEnd: "18:00",
+            paused: false,
+          };
+        });
         setTargetSchedules(restoredSchedules);
       }
     } catch (err) {
