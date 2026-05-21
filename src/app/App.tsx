@@ -738,8 +738,7 @@ export default function App() {
                       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.borderColor = C.lightBd)}
                       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "#e5e7eb")}
                     >
-                      <div className="flex items-center gap-3 mb-2">
-                        <input type="checkbox" defaultChecked className="w-4 h-4 rounded" style={{ accentColor: C.primary }} />
+                      <div className="mb-2">
                         <span className="text-gray-700" style={{ fontWeight: 700, fontSize: "0.875rem" }}>{item.title}</span>
                       </div>
                       <p className="text-gray-400" style={{ fontSize: "0.75rem" }}>{item.desc}</p>
