@@ -27,44 +27,14 @@ function saveData() {
   }
 }
 
-// 초기 데이터 로드 및 타이머 재설정 함수
-function loadData() {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      const data = fs.readFileSync(DATA_FILE, 'utf-8');
-      targets = JSON.parse(data);
-      console.log(`[Load] Restored ${targets.length} targets from data.json`);
-      
-      // 타이머 재가동
-      targets.forEach(t => {
-        if (!t.schedule) {
-          t.schedule = { interval: t.interval || 30, paused: false, activeHours: 'all' };
-        }
-        setupTimer(t.id);
-      });
-    }
-  } catch (error) {
-    console.error('[Load Error]', error.message);
-  }
-}
+// 중앙 스케줄러 타이머 및 실행 락(Lock)
+let centralTimer = null;
+let checkingTargets = {};
 
 // 24시간 형식으로 현재 시간을 반환하는 헬퍼 함수
 function getCurrentTime() {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
-}
-
-// 타이머 등록 헬퍼 함수
-function setupTimer(targetId) {
-  if (schedulers[targetId]) {
-    clearInterval(schedulers[targetId]);
-    delete schedulers[targetId];
-  }
-  const target = targets.find(t => t.id === targetId);
-  if (!target || !target.schedule || target.schedule.paused) return;
-
-  const intervalMs = target.schedule.interval * 60 * 1000;
-  schedulers[targetId] = setInterval(() => performCheck(targetId), intervalMs);
 }
 
 // 스케줄 실행 체크 (활성 시간대)
@@ -84,31 +54,112 @@ function isWithinActiveHours(schedule) {
   return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
 }
 
+// 중앙 스케줄러 기동 함수
+function startCentralScheduler() {
+  if (centralTimer) {
+    clearInterval(centralTimer);
+  }
+  // 1분(60초)마다 주기적으로 모든 타겟의 스케줄 확인 및 점검 수행
+  centralTimer = setInterval(checkAllTargetsSchedule, 60 * 1000);
+  console.log('[Scheduler] Central scheduler started (1-minute tick)');
+  
+  // 시작 시 즉시 누락되거나 주기 도달한 타겟 점검 가동
+  checkAllTargetsSchedule();
+}
+
+// 모든 타겟 스케줄 검증 및 실행 (1분마다 호출됨)
+function checkAllTargetsSchedule() {
+  console.log(`[Scheduler Tick] Checking schedules at ${getCurrentTime()}`);
+  targets.forEach((target) => {
+    const ts = target.schedule || { interval: target.interval || 30, paused: false, activeHours: 'all' };
+    
+    // 1. 활성화 상태 및 일시정지 여부
+    if (ts.paused) return;
+    
+    // 2. 활성 시간대 조건 확인
+    if (!isWithinActiveHours(ts)) {
+      return;
+    }
+    
+    // 3. 간격(분) 확인 (마지막 실행 시간으로부터 경과된 시간 계산)
+    const intervalMinutes = Number(ts.interval || target.interval || 30);
+    const lastChecked = target.lastCheckedAt || 0;
+    const elapsedMinutes = (Date.now() - lastChecked) / (60 * 1000);
+    
+    if (elapsedMinutes >= intervalMinutes) {
+      console.log(`[Scheduler] Triggering performCheck for ${target.name} - Elapsed: ${Math.round(elapsedMinutes)}m, Interval: ${intervalMinutes}m`);
+      performCheck(target.id); // 백그라운드에서 병렬 비동기 기동
+    }
+  });
+}
+
+// 단일 타겟 모니터링 실행
 async function performCheck(targetId) {
+  if (checkingTargets[targetId]) {
+    console.log(`[PerformCheck] Already crawling for target ${targetId}, skipping duplicate`);
+    return;
+  }
+  
   const targetIndex = targets.findIndex(t => t.id === targetId);
   if (targetIndex === -1) return;
 
   const target = targets[targetIndex];
   
-  // 스케줄 조건 확인 (활성 시간대)
+  // 안전장치: 다시 한 번 스케줄 및 활성 상태 점검
   if (!isWithinActiveHours(target.schedule)) {
     return;
   }
+
+  checkingTargets[targetId] = true;
   try {
-    const results = await crawlSite(target.url, 100);
+    console.log(`[PerformCheck] Starting crawl: ${target.name} (${target.url})`);
+    const results = await crawlSite(target.url, 300); // 수집 제한 300개 상향 반영
+    
     targets[targetIndex] = {
       ...target,
       status: 'active',
       data: results,
+      lastCheckedAt: Date.now(), // 성공 시 밀리초 타임스탬프 영구 기록
       timestamp: getCurrentTime(),
       history: [
         ...(target.history || []),
         { timestamp: getCurrentTime(), results }
-      ].slice(-100) // 기록 최대 100개 유지
+      ].slice(-100) // 최대 100개 유지
     };
     saveData(); // 데이터 영구 저장
+    console.log(`[PerformCheck] Crawl success: ${target.name} (${target.url})`);
   } catch (error) {
     console.error(`[Schedule Error] ${target.url}:`, error.message);
+  } finally {
+    delete checkingTargets[targetId];
+  }
+}
+
+// 기존 setupTimer 호환성 래퍼 (중앙 틱 감지 유도)
+function setupTimer(targetId) {
+  checkAllTargetsSchedule();
+}
+
+// 초기 데이터 로드 및 중앙 스케줄러 시작
+function loadData() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const data = fs.readFileSync(DATA_FILE, 'utf-8');
+      targets = JSON.parse(data);
+      console.log(`[Load] Restored ${targets.length} targets from data.json`);
+      
+      // 스케줄 정보 보정
+      targets.forEach(t => {
+        if (!t.schedule) {
+          t.schedule = { interval: t.interval || 30, paused: false, activeHours: 'all' };
+        }
+      });
+
+      // 중앙 스케줄러 시작
+      startCentralScheduler();
+    }
+  } catch (error) {
+    console.error('[Load Error]', error.message);
   }
 }
 
