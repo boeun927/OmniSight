@@ -199,7 +199,7 @@ app.post('/api/targets', (req, res) => {
     schedule: schedule || { interval, paused: false, activeHours: 'all' },
     timestamp: getCurrentTime(),
     history: [{ timestamp: getCurrentTime(), results: data }],
-    previewUrl: `https://image.thum.io/get/width/1024/crop/800/${url.startsWith('http') ? url : 'https://' + url}`
+    previewUrl: `https://image.thum.io/get/delay/5/width/1024/crop/800/${url.startsWith('http') ? url : 'https://' + url}`
   };
 
   targets.push(newTarget);
