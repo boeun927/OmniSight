@@ -21,7 +21,8 @@ let schedulers = {};
 // 데이터 저장 함수
 function saveData() {
   try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(targets, null, 2), 'utf-8');
+    const cleanTargets = targets.filter(t => t !== null && typeof t === 'object');
+    fs.writeFileSync(DATA_FILE, JSON.stringify(cleanTargets, null, 2), 'utf-8');
   } catch (error) {
     console.error('[Save Error]', error.message);
   }
@@ -71,6 +72,7 @@ function startCentralScheduler() {
 function checkAllTargetsSchedule() {
   console.log(`[Scheduler Tick] Checking schedules at ${getCurrentTime()}`);
   targets.forEach((target) => {
+    if (!target) return;
     const ts = target.schedule || { interval: target.interval || 30, paused: false, activeHours: 'all' };
     
     // 1. 활성화 상태 및 일시정지 여부
@@ -100,10 +102,11 @@ async function performCheck(targetId) {
     return;
   }
   
-  const targetIndex = targets.findIndex(t => t.id === targetId);
+  const targetIndex = targets.findIndex(t => t && t.id === targetId);
   if (targetIndex === -1) return;
 
   const target = targets[targetIndex];
+  if (!target) return;
   
   // 안전장치: 다시 한 번 스케줄 및 활성 상태 점검
   if (!isWithinActiveHours(target.schedule)) {
@@ -145,7 +148,8 @@ function loadData() {
   try {
     if (fs.existsSync(DATA_FILE)) {
       const data = fs.readFileSync(DATA_FILE, 'utf-8');
-      targets = JSON.parse(data);
+      const parsed = JSON.parse(data);
+      targets = (Array.isArray(parsed) ? parsed : []).filter(t => t !== null && typeof t === 'object');
       console.log(`[Load] Restored ${targets.length} targets from data.json`);
       
       // 스케줄 정보 보정
@@ -240,7 +244,7 @@ app.delete('/api/targets/:id', (req, res) => {
     clearInterval(schedulers[id]);
     delete schedulers[id];
   }
-  targets = targets.filter(t => t.id !== id);
+  targets = targets.filter(t => t && t.id !== id);
   saveData();
   res.json({ success: true });
 });
