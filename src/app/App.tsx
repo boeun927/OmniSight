@@ -411,7 +411,11 @@ export default function App() {
   const deleteTarget = async (id: number) => {
     if (window.confirm("해당 사이트를 목록에서 삭제하시겠습니까?")) {
       try {
-        await fetch(`/api/targets/${id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/targets/${id}`, { method: 'DELETE' });
+        if (!res.ok) {
+          alert("삭제에 실패했습니다. 서버 상태를 확인해주세요.");
+          return;
+        }
         setTargets((prev) => prev.filter((t) => t.id !== id));
         if (currentTargetId === id) {
           setCurrentTargetId(null);
@@ -419,6 +423,7 @@ export default function App() {
         }
       } catch (err) {
         console.error("Delete failed:", err);
+        alert("삭제 요청 중 네트워크 오류가 발생했습니다.");
       }
     }
   };
