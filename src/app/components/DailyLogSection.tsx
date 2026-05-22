@@ -167,10 +167,12 @@ export function DailyLogSection({ targetName, targetId, history }: Props) {
   const allRecords = useMemo(() => {
     const todayStr = toLocalISODate(new Date());
     return history.flatMap((h) => {
-      // 백엔드 timestamp는 "HH:MM:SS" 형식임
-      const [time] = h.timestamp.split(' ');
+      // 백엔드 timestamp는 "YYYY-MM-DD HH:MM:SS" 또는 "HH:MM:SS" 형식임
+      const parts = h.timestamp.split(' ');
+      const date = parts.length === 2 ? parts[0] : todayStr;
+      const time = parts.length === 2 ? parts[1] : parts[0];
       return h.results.map((r: any) => ({
-        date: todayStr, // 현재는 당일 데이터 위주이므로 오늘 날짜로 매칭
+        date: date,
         time: time,
         path: r.path,
         status: r.status,
@@ -268,9 +270,14 @@ export function DailyLogSection({ targetName, targetId, history }: Props) {
   const timeGroups = useMemo(() => {
     if (viewMode !== "daily") return [];
     const map: Record<string, DayRecord[]> = {};
-    allRecords.forEach((r) => { if (!map[r.time]) map[r.time] = []; map[r.time].push(r); });
+    allRecords.forEach((r) => {
+      if (r.date === selectedDate) {
+        if (!map[r.time]) map[r.time] = [];
+        map[r.time].push(r);
+      }
+    });
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
-  }, [viewMode, allRecords]);
+  }, [viewMode, allRecords, selectedDate]);
 
   // ── 멀티 모드: 날짜 그룹 ───────────────────────────────────
   const dateGroups = useMemo(() => {
