@@ -113,7 +113,19 @@ async function crawlSite(rootUrl, maxPages = 300) {
     }
   }
 
-  return results;
+  // 중복 경로(path) 정규화 및 고유값 필터링 (동일 페이지 다중 수집 방지)
+  const uniqueResults = [];
+  const seenPaths = new Set();
+  for (const item of results) {
+    if (item && item.path) {
+      if (!seenPaths.has(item.path)) {
+        seenPaths.add(item.path);
+        uniqueResults.push(item);
+      }
+    }
+  }
+
+  return uniqueResults;
 }
 
 export { crawlSite };
