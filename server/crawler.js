@@ -154,7 +154,7 @@ async function crawlSite(rootUrl, maxPages = 300) {
       const $ = cheerio.load(response.data);
       
       const pageInfo = {
-        path: new URL(currentUrl).pathname.replace(/;jsessionid=[^?#]+/i, ''),
+        path: new URL(currentUrl).pathname.replace(/;jsessionid=[^?#]+/i, '') + new URL(currentUrl).search,
         status: response.status,
         loadTime: loadTime + 's',
         brokenImg: false,
@@ -231,7 +231,7 @@ async function crawlSite(rootUrl, maxPages = 300) {
     } catch (error) {
       console.error(`[Crawler Error] ${currentUrl}:`, error.message);
       results.push({
-        path: new URL(currentUrl).pathname.replace(/;jsessionid=[^?#]+/i, ''),
+        path: new URL(currentUrl).pathname.replace(/;jsessionid=[^?#]+/i, '') + new URL(currentUrl).search,
         status: error.response ? error.response.status : (error.code === 'ECONNABORTED' ? 408 : 500),
         loadTime: '0.00s',
         brokenImg: false
