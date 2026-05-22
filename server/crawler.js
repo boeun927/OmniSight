@@ -89,6 +89,52 @@ async function crawlSite(rootUrl, maxPages = 300) {
   // 제외할 확장자 목록
   const IGNORED_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.svg', '.css', '.js', '.woff', '.woff2', '.ttf', '.eot', '.mp4', '.webm', '.zip', '.tar', '.gz'];
 
+  // 3. 만약 renewus.co.kr 이라면, menu.json을 백엔드에서 미리 당겨와서 자바스크립트 수집 큐를 미리 충전해 줍니다.
+  if (domain.includes('renewus.co.kr')) {
+    try {
+      console.log('[Crawler] Special preload for Renewus menu.json...');
+      const menuRes = await axios.get('https://www.renewus.co.kr/resources/service/env/json/menu.json', { 
+        timeout: 5000,
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      if (menuRes.data && menuRes.data.category) {
+        const resolveAndQueue = (urlStr) => {
+          if (urlStr) {
+            if (urlStr.startsWith('javascript:')) {
+              const resolved = resolveJavascriptLink(urlStr);
+              if (resolved) {
+                const fullUrl = new URL(resolved, 'https://www.renewus.co.kr').href;
+                if (!visited.has(fullUrl) && !queue.includes(fullUrl)) {
+                  queue.push(fullUrl);
+                }
+              }
+            } else if (urlStr.startsWith('http') && urlStr.includes(domain)) {
+              if (!visited.has(urlStr) && !queue.includes(urlStr)) {
+                queue.push(urlStr);
+              }
+            } else if (urlStr.startsWith('/') && !urlStr.startsWith('//')) {
+              const fullUrl = new URL(urlStr, 'https://www.renewus.co.kr').href;
+              if (!visited.has(fullUrl) && !queue.includes(fullUrl)) {
+                queue.push(fullUrl);
+              }
+            }
+          }
+        };
+
+        menuRes.data.category.forEach(cat => {
+          resolveAndQueue(cat.url);
+          if (cat.twoDepth) {
+            cat.twoDepth.forEach(sub => {
+              resolveAndQueue(sub.url);
+            });
+          }
+        });
+      }
+    } catch (e) {
+      console.error('[Crawler] Failed to preload Renewus menu.json:', e.message);
+    }
+  }
+
   while (queue.length > 0 && visited.size < maxPages) {
     const currentUrl = queue.shift();
     if (visited.has(currentUrl)) continue;
