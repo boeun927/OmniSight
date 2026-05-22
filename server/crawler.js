@@ -2,6 +2,79 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { URL } from 'url';
 
+function resolveJavascriptLink(href) {
+  // 1. link(idx, num)
+  let m = href.match(/link\((\d+)\s*,\s*(\d+)\)/);
+  if (m) {
+    const idx = parseInt(m[1]);
+    const num = parseInt(m[2]);
+    const linkArray = [
+      ["/"],
+      ["ceo" , "history" , "vision" , "ci" , "map"],
+      ["business_intro" , "business_biz" ,"business_om" ,"", "02_01_0031","02_02_0011","02_02_0011", "02_02_0021", "02_02_0031"],
+      ["ethical_management" , "safety_health", "", "esg_data"],
+      ["invest_news", "statement_financial_position" , "" ],
+      ["invest_news", "", "marketing_materials"],
+      ["personnel_system", ""],
+    ];
+    if (linkArray[idx] && linkArray[idx][num]) {
+      const chk = linkArray[idx][num];
+      return idx === 0 ? chk : `/sub.do?MENUID=${chk}&MENUNO=${idx}`;
+    }
+  }
+
+  // 2. linkBBS(idx, num, 'bbsNo')
+  m = href.match(/linkBBS\((\d+)\s*,\s*(\d+)\s*,\s*['"]([^'"]+)['"]\)/);
+  if (m) {
+    const idx = parseInt(m[1]);
+    const num = parseInt(m[2]);
+    const bbsNo = m[3];
+    const linkArray = [
+      ["/"],
+      ["ceo" , "history" , "vision" , "ci" , "map"],
+      ["business_intro" , "business_biz" ,"business_om" ,"", "02_01_0031","02_02_0011","02_02_0011", "02_02_0021", "02_02_0031"],
+      ["ethical_management" , "safety_health", "", "esg_data"],
+      ["invest_news", "statement_financial_position" , "" ],
+      ["invest_news", "", "marketing_materials"],
+      ["personnel_system", ""],
+    ];
+    if (linkArray[idx] && linkArray[idx][num]) {
+      const chk = linkArray[idx][num];
+      return idx === 0 ? chk : `/bbs/data/bbsDataList.do?MENUID=${chk}&MENUNO=${idx}&bbsNo=${bbsNo}`;
+    }
+  }
+
+  // 3. linkBusiness(idx, num)
+  m = href.match(/linkBusiness\((\d+)\s*,\s*(\d+)\)/);
+  if (m) {
+    const idx = parseInt(m[1]);
+    const num = parseInt(m[2]);
+    if (idx === 2) {
+      if (num === 1) {
+        return `/env/bsnsintrcn/bsnsintrcnList.do?MENUNO=2&SUB_MENUNO=2&searchBsnsintrcnCode=A012001&searchClCode=A012003&ctgryNo=1`;
+      }
+      if (num === 2) {
+        return `/env/bsnsintrcn/bsnsintrcnList.do?MENUNO=2&SUB_MENUNO=2&searchBsnsintrcnCode=A012001&searchClCode=A012003&ctgryNo=`;
+      }
+      if (num === 3) {
+        return `/env/bsnsintrcn/bsnsintrcnList.do?MENUNO=2&SUB_MENUNO=3&searchBsnsintrcnCode=A012002&searchClCode=A012009&ctgryNo=`;
+      }
+    }
+  }
+
+  // 4. linkCarbon(idx, num)
+  m = href.match(/linkCarbon\((\d+)\s*,\s*(\d+)\)/);
+  if (m) {
+    const idx = parseInt(m[1]);
+    const num = parseInt(m[2]);
+    if (idx === 3 && num === 3) {
+      return `/env/carbonReduc/carbonReducDtl.do?MENUID=3&SUB_MENUNO=3`;
+    }
+  }
+
+  return null;
+}
+
 async function crawlSite(rootUrl, maxPages = 300) {
   let normalizedRoot = rootUrl.replace(/;jsessionid=[^?#]+/i, '');
   if (!normalizedRoot.endsWith('/') && !normalizedRoot.split('/').pop().includes('.')) {
@@ -74,8 +147,15 @@ async function crawlSite(rootUrl, maxPages = 300) {
         let href = $(el).attr('href');
         if (!href) return;
 
-        // Skip non-page links
-        if (href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('#')) {
+        // Skip non-page links (but resolve customized javascript navigation for eGovFrame)
+        if (href.startsWith('javascript:')) {
+          const resolved = resolveJavascriptLink(href);
+          if (resolved) {
+            href = resolved;
+          } else {
+            return;
+          }
+        } else if (href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('#')) {
           return;
         }
 
