@@ -3,7 +3,7 @@ import * as cheerio from 'cheerio';
 import { URL } from 'url';
 
 async function crawlSite(rootUrl, maxPages = 300) {
-  let normalizedRoot = rootUrl;
+  let normalizedRoot = rootUrl.replace(/;jsessionid=[^?#]+/i, '');
   if (!normalizedRoot.endsWith('/') && !normalizedRoot.split('/').pop().includes('.')) {
     normalizedRoot += '/';
   }
@@ -35,7 +35,7 @@ async function crawlSite(rootUrl, maxPages = 300) {
       const $ = cheerio.load(response.data);
       
       const pageInfo = {
-        path: new URL(currentUrl).pathname,
+        path: new URL(currentUrl).pathname.replace(/;jsessionid=[^?#]+/i, ''),
         status: response.status,
         loadTime: loadTime + 's',
         brokenImg: false,
@@ -80,7 +80,8 @@ async function crawlSite(rootUrl, maxPages = 300) {
         }
 
         try {
-          const absoluteUrl = new URL(href, currentUrl).href.split('#')[0]; // Remove hash
+          const cleanedHref = href.replace(/;jsessionid=[^?#]+/i, '');
+          const absoluteUrl = new URL(cleanedHref, currentUrl).href.split('#')[0]; // Remove hash
           const hrefUrl = new URL(absoluteUrl);
           const pathname = hrefUrl.pathname.toLowerCase();
 
@@ -104,7 +105,7 @@ async function crawlSite(rootUrl, maxPages = 300) {
     } catch (error) {
       console.error(`[Crawler Error] ${currentUrl}:`, error.message);
       results.push({
-        path: new URL(currentUrl).pathname,
+        path: new URL(currentUrl).pathname.replace(/;jsessionid=[^?#]+/i, ''),
         status: error.response ? error.response.status : (error.code === 'ECONNABORTED' ? 408 : 500),
         loadTime: '0.00s',
         brokenImg: false
