@@ -99,3 +99,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# OmniSight runtime & sensitive data
+server/.env
+server/*.log
+server/alerts.json
+server/incidents.json
+server/user_profile.json
+server/users.json
+scratch/

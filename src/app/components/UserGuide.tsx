@@ -31,6 +31,14 @@ import {
   RefreshCw,
   ToggleRight,
   Star,
+  AlertTriangle,
+  Sparkles,
+  FileText,
+  Printer,
+  Code,
+  Copy,
+  Globe,
+  Bot
 } from "lucide-react";
 import { OmniSightLogo } from "./OmniSightLogo";
 
@@ -50,17 +58,22 @@ const SECTION_COLORS = [
   { bg: "#fefce8", border: "#fde68a", accent: "#d97706", light: "#fef9c3" },  // amber
   { bg: "#fdf4ff", border: "#e9d5ff", accent: "#9333ea", light: "#f3e8ff" },  // purple
   { bg: "#fff1f2", border: "#fecdd3", accent: "#e11d48", light: "#ffe4e6" },  // rose
+  { bg: "#f0f9ff", border: "#bae6fd", accent: "#0284c7", light: "#e0f2fe" },  // sky (alerts)
+  { bg: "#fff7ed", border: "#ffedd5", accent: "#ea580c", light: "#ffedd5" },  // orange (incidents)
+  { bg: "#faf5ff", border: "#f3e8ff", accent: "#7e22ce", light: "#f3e8ff" },  // violet (ai-analysis)
 ];
 
-type Section = "intro" | "add" | "dashboard" | "log" | "schedule" | "alerts";
+type Section = "intro" | "add" | "dashboard" | "log" | "schedule" | "alerts" | "incidents" | "ai-analysis";
 
 const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode; short: string }[] = [
-  { id: "intro",    label: "OmniSight 소개",      icon: <BookOpen size={14} />,      short: "소개" },
-  { id: "add",      label: "신규 타겟 등록",       icon: <PlusCircle size={14} />,    short: "등록" },
-  { id: "dashboard",label: "모니터링 대시보드",    icon: <LayoutDashboard size={14} />, short: "대시보드" },
-  { id: "log",      label: "기록 조회",            icon: <Calendar size={14} />,      short: "기록 조회" },
-  { id: "schedule", label: "모니터링 주기 관리",   icon: <CalendarClock size={14} />, short: "주기 관리" },
-  { id: "alerts",   label: "알림 설정",            icon: <Bell size={14} />,          short: "알림" },
+  { id: "intro",       label: "OmniSight 소개",      icon: <BookOpen size={14} />,      short: "소개" },
+  { id: "add",         label: "신규 타겟 등록",       icon: <PlusCircle size={14} />,    short: "등록" },
+  { id: "dashboard",   label: "모니터링 대시보드",    icon: <LayoutDashboard size={14} />, short: "대시보드" },
+  { id: "log",         label: "기록 조회",            icon: <Calendar size={14} />,      short: "기록 조회" },
+  { id: "schedule",    label: "모니터링 주기 관리",   icon: <CalendarClock size={14} />, short: "주기 관리" },
+  { id: "alerts",      label: "알림 설정",            icon: <Bell size={14} />,          short: "알림" },
+  { id: "incidents",   label: "장애현황 관리",        icon: <AlertTriangle size={14} />, short: "장애현황" },
+  { id: "ai-analysis", label: "AI 콘텐츠 분석",       icon: <Sparkles size={14} />,      short: "AI 분석" },
 ];
 
 // ── 재사용 컴포넌트 ──────────────────────────────────────────
@@ -137,16 +150,18 @@ function SectionTitle({ icon, title, subtitle, color }: { icon: React.ReactNode;
 }
 
 // ── 메인 컴포넌트 ────────────────────────────────────────────
-export function UserGuide({ onNavigate }: { onNavigate: (tab: string) => void }) {
+export function UserGuide({ onNavigate, onStartTour }: { onNavigate: (tab: string) => void; onStartTour?: () => void }) {
   const [activeNav, setActiveNav] = useState<Section>("intro");
 
   const sectionRefs: Record<Section, React.RefObject<HTMLDivElement>> = {
-    intro:    useRef<HTMLDivElement>(null),
-    add:      useRef<HTMLDivElement>(null),
-    dashboard:useRef<HTMLDivElement>(null),
-    log:      useRef<HTMLDivElement>(null),
-    schedule: useRef<HTMLDivElement>(null),
-    alerts:   useRef<HTMLDivElement>(null),
+    intro:      useRef<HTMLDivElement>(null),
+    add:        useRef<HTMLDivElement>(null),
+    dashboard:  useRef<HTMLDivElement>(null),
+    log:        useRef<HTMLDivElement>(null),
+    schedule:   useRef<HTMLDivElement>(null),
+    alerts:     useRef<HTMLDivElement>(null),
+    incidents:  useRef<HTMLDivElement>(null),
+    "ai-analysis": useRef<HTMLDivElement>(null),
   };
 
   const scrollTo = (id: Section) => {
@@ -181,7 +196,16 @@ export function UserGuide({ onNavigate }: { onNavigate: (tab: string) => void })
             OmniSight는 웹사이트의 페이지 상태·이미지·응답 속도를 자동으로 모니터링하고,
             이상 발생 시 이메일로 즉시 알림을 보내는 통합 모니터링 솔루션입니다.
           </p>
-          <div className="flex flex-wrap gap-2 mt-6">
+          <div className="flex flex-wrap gap-2.5 mt-6">
+            {onStartTour && (
+              <button
+                onClick={onStartTour}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-sky-900 font-extrabold text-xs shadow-lg transition-all hover:bg-sky-50 active:scale-95 cursor-pointer"
+              >
+                <span>🚀 대화형 가이드 튜토리얼 시작</span>
+                <ChevronRight size={14} />
+              </button>
+            )}
             {[
               { label: "신규 타겟 등록", onClick: () => onNavigate("add") },
               { label: "대시보드 바로가기", onClick: () => onNavigate("dashboard") },
@@ -599,6 +623,102 @@ export function UserGuide({ onNavigate }: { onNavigate: (tab: string) => void })
 
             <Callout type="info">
               현재 버전은 알림 미리보기 기능을 제공합니다. 실제 이메일 발송을 위해서는 SMTP 또는 알림 API 연동 설정이 필요합니다.
+            </Callout>
+          </div>
+        </section>
+
+        {/* ══════════════════════════════════════════════
+            07. 장애현황 관리
+        ══════════════════════════════════════════════ */}
+        <section ref={sectionRefs.incidents} className="scroll-mt-20">
+          <div className="p-7 rounded-3xl border" style={{ backgroundColor: SECTION_COLORS[6].bg, borderColor: SECTION_COLORS[6].border }}>
+            <SectionTitle
+              icon={<AlertTriangle size={22} />}
+              title="장애현황 관리"
+              subtitle="감지된 장애 이력을 관리하고 정형 보고서를 출력하는 방법"
+              color={SECTION_COLORS[6]}
+            />
+
+            <div className="space-y-3 mb-6">
+              <StepCard
+                number={1}
+                title="자동 장애 채록 및 이력 감지"
+                desc="모니터링 점검 중 HTTP 4xx/5xx 오류나 이미지 미수집, 렌더링 결함이 발생하면 장애 이력이 자동으로 생성되며 '진행 중(OPEN)' 상태로 등록됩니다."
+              />
+              <StepCard
+                number={2}
+                title="상태별 장애 필터링 조회"
+                desc="상단 필터 버튼(전체 / 진행 중 / 조치 완료)을 눌러 현재 해결해야 할 장애와 조치가 완료된 이력을 구분하여 조회합니다."
+              />
+              <StepCard
+                number={3}
+                title="상세 장애 보고서 확인 및 A4 인쇄"
+                desc="'장애 보고서 보기' 버튼을 클릭하면 장애 증상, 추정 원인, 영향 범위, 액션 로그가 포함된 보고서 뷰가 열립니다. 상단의 '📄 보고서 인쇄' 버튼으로 결재용 정형 보고서를 즉시 출력할 수 있습니다."
+              />
+              <StepCard
+                number={4}
+                title="수동 조치 완료 및 이력 삭제"
+                desc="장애가 해결된 경우 '조치 완료' 버튼을 눌러 조치 완료 시각과 총 장애 소요 시간을 자동 계산해 완료 처리하고 복구 알림 메일을 전송합니다."
+              />
+            </div>
+
+            <BadgeRow items={[
+              { icon: <AlertTriangle size={16} />, label: "OPEN (장애 진행 중)", desc: "미해결된 장애 건으로 조치가 시급한 상태를 의미합니다.", color: "#dc2626", bg: "#fee2e2" },
+              { icon: <CheckCircle2 size={16} />, label: "RESOLVED (조치 완료)", desc: "장애가 복구되었거나 관리자가 복구 처리한 이력입니다.", color: "#16a34a", bg: "#dcfce7" },
+              { icon: <FileText size={16} />, label: "장애 보고서", desc: "고객사, 담당 부서, 액션 로그, 재발 방지 대책이 포함된 표준 양식입니다.", color: "#ea580c", bg: "#ffedd5" },
+              { icon: <Printer size={16} />, label: "인쇄 및 PDF 출력", desc: "A4 인쇄에 최적화된 서식 스타일로 즉시 결재 문서를 생성합니다.", color: "#0284c7", bg: "#e0f2fe" },
+            ]} />
+
+            <Callout type="tip">
+              장애 발생 시 모니터링 결과 알림설정에 지정해 둔 수신 이메일로 장애 발생 및 복구 안내 메일이 실시간 자동 발송됩니다.
+            </Callout>
+          </div>
+        </section>
+
+        {/* ══════════════════════════════════════════════
+            08. AI 콘텐츠 분석 (SEO & GEO)
+        ══════════════════════════════════════════════ */}
+        <section ref={sectionRefs["ai-analysis"]} className="scroll-mt-20">
+          <div className="p-7 rounded-3xl border" style={{ backgroundColor: SECTION_COLORS[7].bg, borderColor: SECTION_COLORS[7].border }}>
+            <SectionTitle
+              icon={<Sparkles size={22} />}
+              title="AI 콘텐츠 분석 (SEO & GEO)"
+              subtitle="검색엔진 최적화 및 생성형 AI 인용 확률 평가 가이드"
+              color={SECTION_COLORS[7]}
+            />
+
+            <div className="space-y-3 mb-6">
+              <StepCard
+                number={1}
+                title="웹사이트 URL 입력 또는 선택"
+                desc="분석할 웹사이트 URL을 드롭다운에서 선택하거나 직접 입력창에 기입한 후 'AI 분석 실행' 버튼을 누릅니다."
+              />
+              <StepCard
+                number={2}
+                title="SEO 최적화 분석 탭 (검색엔진 최적화)"
+                desc="Google Lighthouse 글로벌 가중치 공식(Title 20%, Description 20%, H1 Header 15%, SSL 15%, Open Graph 15%, Image Alt 15%)을 기반으로 100점 만점 SEO 점수와 진단 가이드를 제공합니다."
+              />
+              <StepCard
+                number={3}
+                title="GEO 최적화 분석 탭 (생성형 AI 인용 최적화)"
+                desc="프린스턴 대학교 GEO 학술 논문 표준(Schema.org 30%, Q&A 구조 25%, 수치 밀도 25%, 세만틱 용량 20%)을 적용하여 생성형 AI 모델 인용 확률을 정밀 평가합니다."
+              />
+              <StepCard
+                number={4}
+                title="AI 모델별 인용 예측 & 개선 코드 복사"
+                desc="ChatGPT, Perplexity, Gemini, Claude의 인용 확률(%)을 분석하고, 하단의 '📋 AI 개선 조치 코드 복사' 버튼으로 HTML 적용 메타 코드를 원클릭 복사합니다."
+              />
+            </div>
+
+            <BadgeRow items={[
+              { icon: <Search size={16} />, label: "SEO 점수 (Lighthouse)", desc: "네이버, 구글 등 전통적 검색엔진 상위 노출에 필요한 6대 핵심 메타 요소를 평가합니다.", color: "#0284c7", bg: "#e0f2fe" },
+              { icon: <Bot size={16} />, label: "GEO 점수 (Princeton Paper)", desc: "ChatGPT, Claude 등 AI 답변에 본문 출처가 인용될 확률을 평가하고 최적화합니다.", color: "#7e22ce", bg: "#f3e8ff" },
+              { icon: <Globe size={16} />, label: "4대 AI 인용 확률", desc: "Perplexity, Gemini 등 각 AI 엔진별 검색 추천 확률을 시각화 그래프로 제시합니다.", color: "#16a34a", bg: "#dcfce7" },
+              { icon: <Code size={16} />, label: "원클릭 코드 복사", desc: "분석된 개선 메타 태그 및 Schema.org 구조화 데이터를 즉시 복사하여 사이트에 적용할 수 있습니다.", color: "#d97706", bg: "#fef9c3" },
+            ]} />
+
+            <Callout type="info">
+              웹사이트 수정 후 AI 콘텐츠 분석을 다시 실행하시면 업데이트된 SEO/GEO 점수를 즉시 확인하실 수 있습니다.
             </Callout>
           </div>
         </section>
